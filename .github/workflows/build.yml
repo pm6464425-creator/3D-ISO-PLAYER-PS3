@@ -1,0 +1,99 @@
+name: Compilar PKG PS3
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Obtener proyecto
+        uses: actions/checkout@v4
+
+      - name: Instalar dependencias del host
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y curl jq ca-certificates libelf1 zlib1g libgmp10 libstdc++6
+
+      - name: Descargar PS3DEV precompilado actual
+        run: |
+          URL=$(curl -fsSL https://api.github.com/repos/ps3dev/ps3dev/releases | jq -r '
+            map(select(.prerelease and (.draft | not)))
+            | sort_by(.published_at) | reverse | .[0].assets[]
+            | select(.name == "ps3dev-linux-X64.tar.gz")
+            | .browser_download_url' | head -n1)
+          test -n "$URL"
+          curl -fL "$URL" -o /tmp/ps3dev.tar.gz
+          tar xzf /tmp/ps3dev.tar.gz -C "$GITHUB_WORKSPACE"
+          echo "PS3DEV=$GITHUB_WORKSPACE/ps3dev" >> "$GITHUB_ENV"
+          echo "PSL1GHT=$GITHUB_WORKSPACE/ps3dev" >> "$GITHUB_ENV"
+          echo "$GITHUB_WORKSPACE/ps3dev/bin" >> "$GITHUB_PATH"
+          echo "$GITHUB_WORKSPACE/ps3dev/ppu/bin" >> "$GITHUB_PATH"
+          echo "$GITHUB_WORKSPACE/ps3dev/spu/bin" >> "$GITHUB_PATH"
+
+      - name: Preparar bibliotecas NTFS y Cobra
+        run: |
+          mkdir -p third_party/include third_party/lib pkgfiles/USRDIR
+          curl -fL https://raw.githubusercontent.com/aldostools/IRISMAN/master/include/ntfs.h -o third_party/include/ntfs.h
+          curl -fL https://raw.githubusercontent.com/aldostools/IRISMAN/master/include/cobra.h -o third_party/include/cobra.h
+          curl -fL https://raw.githubusercontent.com/aldostools/IRISMAN/master/lib/libcobra.a -o third_party/lib/libcobra.a
+          curl -fL https://raw.githubusercontent.com/aldostools/IRISMAN/master/lib/libfatfs.a -o third_party/lib/libfatfs.a
+          curl -fL https://raw.githubusercontent.com/aldostools/IRISMAN/master/lib/libntfs_ext.a -o third_party/lib/libntfs_ext.a
+
+      - name: Preparar raw_iso.sprx
+        run: |
+          curl -fL https://raw.githubusercontent.com/aldostools/IRISMAN/master/rawseciso/bin2c/rawseciso.c -o /tmp/rawseciso.c
+          python3 - <<'PY'
+          import re
+          from pathlib import Path
+          s=Path('/tmp/rawseciso.c').read_text()
+          m=re.search(r'raw_iso_sprx\[[^\]]+\]\s*=\s*\{(.*?)\};', s, re.S)
+          if not m:
+              raise SystemExit('No se encontró raw_iso_sprx')
+          data=bytes(int(x,16) for x in re.findall(r'0x([0-9A-Fa-f]{2})', m.group(1)))
+          Path('pkgfiles/USRDIR/raw_iso.sprx').write_bytes(data)
+          print('raw_iso.sprx:', len(data), 'bytes')
+          PY
+
+      - name: Crear ICON0.PNG
+        run: |
+          python3 - <<'PY'
+          import struct,zlib
+          from pathlib import Path
+          w,h=320,176
+          rows=[]
+          for y in range(h):
+              row=bytearray([0])
+              for x in range(w):
+                  # degradado azul oscuro/cian simple
+                  r=10 + (x*20//w)
+                  g=28 + (x*70//w)
+                  b=52 + (y*80//h)
+                  row += bytes((r,g,b,255))
+              rows.append(bytes(row))
+          raw=b''.join(rows)
+          def chunk(t,d):
+              return struct.pack('>I',len(d))+t+d+struct.pack('>I',zlib.crc32(t+d)&0xffffffff)
+          png=b'\x89PNG\r\n\x1a\n'+chunk(b'IHDR',struct.pack('>IIBBBBB',w,h,8,6,0,0,0))+chunk(b'IDAT',zlib.compress(raw,9))+chunk(b'IEND',b'')
+          Path('pkgfiles/ICON0.PNG').write_bytes(png)
+          PY
+
+      - name: Compilar PKG
+        run: |
+          ppu-gcc --version
+          make clean
+          make pkg
+          ls -lh *.pkg
+
+      - name: Guardar PKG
+        uses: actions/upload-artifact@v4
+        with:
+          name: 3D-ISO-PLAYER-PS3-PKG
+          path: |
+            3disoplayer.pkg
+            3disoplayer.gnpdrm.pkg
+          if-no-files-found: error
