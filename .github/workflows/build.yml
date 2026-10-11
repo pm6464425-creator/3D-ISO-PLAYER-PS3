@@ -35,7 +35,7 @@ jobs:
           echo "$GITHUB_WORKSPACE/ps3dev/ppu/bin" >> "$GITHUB_PATH"
           echo "$GITHUB_WORKSPACE/ps3dev/spu/bin" >> "$GITHUB_PATH"
 
-      - name: Preparar bibliotecas NTFS y Cobra
+      - name: Preparar bibliotecas NTFS Cobra UDF e imagenes
         run: |
           mkdir -p third_party/include third_party/lib pkgfiles/USRDIR
           curl -fL https://raw.githubusercontent.com/aldostools/IRISMAN/master/include/ntfs.h -o third_party/include/ntfs.h
@@ -43,6 +43,43 @@ jobs:
           curl -fL https://raw.githubusercontent.com/aldostools/IRISMAN/master/lib/libcobra.a -o third_party/lib/libcobra.a
           curl -fL https://raw.githubusercontent.com/aldostools/IRISMAN/master/lib/libfatfs.a -o third_party/lib/libfatfs.a
           curl -fL https://raw.githubusercontent.com/aldostools/IRISMAN/master/lib/libntfs_ext.a -o third_party/lib/libntfs_ext.a
+
+          curl -fL https://raw.githubusercontent.com/ace20022/libudfread/master/src/udfread.h -o third_party/include/udfread.h
+          curl -fL https://raw.githubusercontent.com/ace20022/libudfread/master/src/blockinput.h -o third_party/include/blockinput.h
+          curl -fL https://raw.githubusercontent.com/ace20022/libudfread/master/src/default_blockinput.h -o third_party/include/default_blockinput.h
+          curl -fL https://raw.githubusercontent.com/ace20022/libudfread/master/src/ecma167.h -o third_party/include/ecma167.h
+          curl -fL https://raw.githubusercontent.com/ace20022/libudfread/master/src/udfread.c -o source/udfread.c
+          curl -fL https://raw.githubusercontent.com/ace20022/libudfread/master/src/ecma167.c -o source/ecma167.c
+          curl -fL https://raw.githubusercontent.com/nothings/stb/master/stb_image.h -o third_party/include/stb_image.h
+
+      - name: Activar portadas internas en la interfaz
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('source/main.cpp')
+          s=p.read_text()
+          old='''extern "C" {\n#include "cobra.h"\n}\n'''
+          new='''extern "C" {\n#include "cobra.h"\nint cover_prepare(const char *iso_path);\nint cover_draw(const char *iso_path, int x, int y, int w, int h);\nint cover_state(const char *iso_path);\n}\n'''
+          if old not in s:
+              raise SystemExit('No se encontro bloque Cobra para parche V10')
+          s=s.replace(old,new,1)
+
+          old='''    for(int yy=0; yy<h; yy+=4) fill_rect(x,y+yy,w,4,mix_color(c1,c2,yy,h));\n'''
+          new='''    if(cover_draw(m.path.c_str(),x,y,w,h)) {\n        std::string title=clean_title(m.name);\n        int band_h=h/3;\n        fill_rect(x,y+h-band_h,w,band_h,0xE6070D16);\n        draw_wrapped(x+10,y+h-band_h+10,w-20,title,1,0xFFF5FAFF,2);\n        char usb_real[32];\n        snprintf(usb_real,sizeof(usb_real),"USB %03d",m.usb_id);\n        draw_text(x+10,y+h-28,usb_real,1,0xFF71DCFF,16);\n        return;\n    }\n\n    for(int yy=0; yy<h; yy+=4) fill_rect(x,y+yy,w,4,mix_color(c1,c2,yy,h));\n'''
+          if old not in s:
+              raise SystemExit('No se encontro inicio de poster para parche V10')
+          s=s.replace(old,new,1)
+          s=s.replace('draw_text(x+20,base+102,"PORTADA   AUTO CINEMA",1,MUTED,40);',
+                      'draw_text(x+20,base+102,"PORTADA   ISO / AUTO",1,MUTED,40);',1)
+
+          old='''        p_up=up; p_down=down; p_left=left; p_right=right; p_x=x; p_o=o; p_tri=tri;\n        render_ui();\n'''
+          new='''        p_up=up; p_down=down; p_left=left; p_right=right; p_x=x; p_o=o; p_tri=tri;\n\n        /* Carga progresiva: una portada por vez de la pagina visible. */\n        if(!g_movies.empty() && (g_frame % 30)==0) {\n            static int cover_slot=0;\n            int first=(g_selected/GRID_PAGE)*GRID_PAGE;\n            int idx=first+(cover_slot++ % GRID_PAGE);\n            if(idx>=(int)g_movies.size()) idx=g_selected;\n            if(idx>=0 && idx<(int)g_movies.size() && cover_state(g_movies[idx].path.c_str())==0)\n                cover_prepare(g_movies[idx].path.c_str());\n        }\n        render_ui();\n'''
+          if old not in s:
+              raise SystemExit('No se encontro bucle principal para parche V10')
+          s=s.replace(old,new,1)
+          p.write_text(s)
+          print('main.cpp parcheado para V10')
+          PY
 
       - name: Preparar raw_iso.sprx
         run: |
@@ -53,97 +90,57 @@ jobs:
           s=Path('/tmp/rawseciso.c').read_text()
           m=re.search(r'raw_iso_sprx\[[^\]]+\]\s*=\s*\{(.*?)\};', s, re.S)
           if not m:
-              raise SystemExit('No se encontró raw_iso_sprx')
+              raise SystemExit('No se encontro raw_iso_sprx')
           data=bytes(int(x,16) for x in re.findall(r'0x([0-9A-Fa-f]{2})', m.group(1)))
           Path('pkgfiles/USRDIR/raw_iso.sprx').write_bytes(data)
-          print('raw_iso.sprx:', len(data), 'bytes')
+          print('raw_iso.sprx:',len(data),'bytes')
           PY
 
       - name: Crear tipografia y arte Cinema para XMB
         run: |
           python3 - <<'PY'
           from pathlib import Path
-          from PIL import Image, ImageDraw, ImageFont, ImageFilter
-          import os
-
-          Path('pkgfiles/USRDIR').mkdir(parents=True, exist_ok=True)
-
-          # Atlas rasterizado: no se distribuye el archivo de fuente, solo pixeles alfa.
+          from PIL import Image,ImageDraw,ImageFont
+          import math
+          Path('pkgfiles/USRDIR').mkdir(parents=True,exist_ok=True)
           FW,FH=16,24
           font_path='/usr/share/fonts/truetype/dejavu/DejaVuSansCondensed-Bold.ttf'
           fnt=ImageFont.truetype(font_path,18)
           out=bytearray()
           for code in range(32,127):
-              im=Image.new('L',(FW,FH),0)
-              d=ImageDraw.Draw(im)
-              ch=chr(code)
-              box=d.textbbox((0,0),ch,font=fnt)
-              tw=box[2]-box[0]; th=box[3]-box[1]
-              x=max(0,(FW-tw)//2-box[0])
-              y=max(0,(FH-th)//2-box[1]-1)
-              d.text((x,y),ch,font=fnt,fill=255)
+              im=Image.new('L',(FW,FH),0); d=ImageDraw.Draw(im); ch=chr(code)
+              box=d.textbbox((0,0),ch,font=fnt); tw=box[2]-box[0]; th=box[3]-box[1]
+              d.text((max(0,(FW-tw)//2-box[0]),max(0,(FH-th)//2-box[1]-1)),ch,font=fnt,fill=255)
               out.extend(im.tobytes())
           Path('pkgfiles/USRDIR/FONT.RAW').write_bytes(out)
-          print('FONT.RAW:',len(out),'bytes')
 
-          def gradient(size, c1, c2):
-              w,h=size
-              im=Image.new('RGB',size,c1)
-              px=im.load()
+          def grad(size,a,b):
+              w,h=size; im=Image.new('RGB',size,a); px=im.load()
               for y in range(h):
-                  t=y/max(1,h-1)
-                  c=tuple(int(c1[i]*(1-t)+c2[i]*t) for i in range(3))
+                  t=y/max(1,h-1); c=tuple(int(a[i]*(1-t)+b[i]*t) for i in range(3))
                   for x in range(w): px[x,y]=c
               return im
-
-          def add_cinema_art(im, title_scale=1.0):
-              w,h=im.size
-              d=ImageDraw.Draw(im,'RGBA')
-              # haz de proyector / luces abstractas
-              d.polygon([(int(w*.08),h),(int(w*.47),0),(int(w*.62),0),(int(w*.36),h)],fill=(20,170,225,22))
-              d.polygon([(int(w*.92),h),(int(w*.58),0),(int(w*.70),0),(int(w*.99),h)],fill=(116,55,205,20))
-              # tira de pelicula
-              strip_h=max(24,int(h*.105))
-              y=int(h*.76)
-              d.rounded_rectangle((0,y,w,y+strip_h),radius=max(5,strip_h//8),fill=(4,10,20,205),outline=(60,180,225,100),width=max(1,w//500))
-              hole_w=max(8,int(w*.022)); hole_h=max(6,int(strip_h*.25))
-              step=max(20,int(w*.06))
-              for x in range(14,w,step):
-                  d.rounded_rectangle((x,y+7,x+hole_w,y+7+hole_h),radius=2,fill=(34,76,104,210))
-                  d.rounded_rectangle((x,y+strip_h-hole_h-7,x+hole_w,y+strip_h-7),radius=2,fill=(34,76,104,210))
-              # reel estilizado
+          def art(im):
+              w,h=im.size; d=ImageDraw.Draw(im,'RGBA')
+              d.polygon([(int(w*.04),h),(int(w*.43),0),(int(w*.60),0),(int(w*.28),h)],fill=(25,185,235,28))
+              d.polygon([(int(w*.97),h),(int(w*.62),0),(int(w*.76),0),(int(w*.99),h)],fill=(130,65,215,22))
               r=int(min(w,h)*.14); cx=int(w*.17); cy=int(h*.40)
-              d.ellipse((cx-r,cy-r,cx+r,cy+r),fill=(6,16,27,235),outline=(102,221,255,230),width=max(2,r//12))
+              d.ellipse((cx-r,cy-r,cx+r,cy+r),fill=(5,14,25,235),outline=(95,220,255,235),width=max(2,r//12))
               for ang in (0,90,180,270):
-                  import math
-                  a=math.radians(ang)
-                  hx=int(cx+math.cos(a)*r*.48); hy=int(cy+math.sin(a)*r*.48); rr=max(3,r//5)
-                  d.ellipse((hx-rr,hy-rr,hx+rr,hy+rr),fill=(30,70,92,245))
-              d.ellipse((cx-r//7,cy-r//7,cx+r//7,cy+r//7),fill=(90,210,245,255))
+                  a=math.radians(ang); hx=int(cx+math.cos(a)*r*.48); hy=int(cy+math.sin(a)*r*.48); rr=max(3,r//5)
+                  d.ellipse((hx-rr,hy-rr,hx+rr,hy+rr),fill=(27,67,92,245))
+              d.ellipse((cx-r//7,cy-r//7,cx+r//7,cy+r//7),fill=(90,215,250,255))
 
-          # ICON0 320x176
-          icon=gradient((320,176),(4,10,20),(18,42,68))
-          add_cinema_art(icon)
-          d=ImageDraw.Draw(icon,'RGBA')
-          ft=ImageFont.truetype(font_path,31)
-          fs=ImageFont.truetype(font_path,13)
-          d.text((93,48),'3D ISO',font=ft,fill=(245,251,255,255))
-          d.text((93,84),'PLAYER',font=ft,fill=(83,216,255,255))
-          d.text((95,125),'CINEMA LIBRARY',font=fs,fill=(178,205,224,255))
-          icon.save('pkgfiles/ICON0.PNG',optimize=True)
+          icon=grad((320,176),(4,10,20),(18,42,68)); art(icon); d=ImageDraw.Draw(icon,'RGBA')
+          ft=ImageFont.truetype(font_path,30); fs=ImageFont.truetype(font_path,12)
+          d.text((92,45),'3D ISO',font=ft,fill=(245,251,255,255)); d.text((92,82),'PLAYER',font=ft,fill=(83,216,255,255))
+          d.text((94,127),'CINEMA LIBRARY',font=fs,fill=(178,205,224,255)); icon.save('pkgfiles/ICON0.PNG',optimize=True)
 
-          # PIC1 1920x1080, fondo XMB cinematografico
-          pic=gradient((1920,1080),(3,8,17),(14,31,52))
-          add_cinema_art(pic)
-          d=ImageDraw.Draw(pic,'RGBA')
-          ft=ImageFont.truetype(font_path,112)
-          fs=ImageFont.truetype(font_path,35)
-          d.text((565,350),'3D ISO PLAYER',font=ft,fill=(244,250,255,245))
-          d.text((575,485),'CINEMA LIBRARY  •  COBRA  •  NTFS',font=fs,fill=(91,213,255,235))
-          d.rounded_rectangle((565,555,1370,562),radius=3,fill=(80,208,250,130))
+          pic=grad((1920,1080),(3,8,17),(14,31,52)); art(pic); d=ImageDraw.Draw(pic,'RGBA')
+          ft=ImageFont.truetype(font_path,112); fs=ImageFont.truetype(font_path,35)
+          d.text((565,350),'3D ISO PLAYER',font=ft,fill=(244,250,255,245)); d.text((575,485),'CINEMA LIBRARY  •  COBRA  •  NTFS',font=fs,fill=(91,213,255,235))
           pic.save('pkgfiles/PIC1.PNG',optimize=True)
           PY
-          ls -lh pkgfiles/ICON0.PNG pkgfiles/PIC1.PNG pkgfiles/USRDIR/FONT.RAW
 
       - name: Compilar PKG
         run: |
