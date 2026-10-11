@@ -20,7 +20,7 @@ CONTENTID   := UP0001-$(APPID)_00-0000000000000000
 PKGFILES    := $(TOPDIR)/pkgfiles
 ICON0       := $(TOPDIR)/pkgfiles/ICON0.PNG
 
-CFLAGS      := -O2 -Wall -mcpu=cell $(MACHDEP) $(INCLUDE)
+CFLAGS      := -O2 -Wall -mcpu=cell -D__GCC_HAVE_SYNC_COMPARE_AND_SWAP_4=1 $(MACHDEP) $(INCLUDE)
 CXXFLAGS    := $(CFLAGS) -fno-exceptions -fno-rtti
 LDFLAGS     := $(MACHDEP) -Wl,-Map,$(notdir $@).map
 
