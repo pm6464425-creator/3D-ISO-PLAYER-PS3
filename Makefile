@@ -50,8 +50,8 @@ export LD := $(CXX)
 endif
 
 export OFILES   := $(CPPFILES:.cpp=.o) $(CFILES:.c=.o) $(sFILES:.s=.o) $(SFILES:.S=.o)
-export INCLUDE  := $(foreach dir,$(INCLUDES),-I$(CURDIR)/$(dir)) $(LIBPSL1GHT_INC) -I$(CURDIR)/$(BUILD)
-export LIBPATHS := $(LIBPSL1GHT_LIB)
+export INCLUDE  := $(foreach dir,$(INCLUDES),-I$(CURDIR)/$(dir)) $(LIBPSL1GHT_INC) -I$(CURDIR)/$(BUILD) -I$(PORTLIBS)/include
+export LIBPATHS := $(LIBPSL1GHT_LIB) -L$(PORTLIBS)/lib
 export CFLAGS
 export CXXFLAGS
 export LDFLAGS
