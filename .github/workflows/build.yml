@@ -51,102 +51,22 @@ jobs:
           curl -fL https://raw.githubusercontent.com/ace20022/libudfread/master/src/ecma167.c -o source/ecma167.c
           curl -fL https://raw.githubusercontent.com/nothings/stb/master/stb_image.h -o third_party/include/stb_image.h
 
-      - name: Activar portadas ISO internet y fondo interno
-        run: |
-          python3 - <<'PY'
-          from pathlib import Path
-          p=Path('source/main.cpp'); s=p.read_text()
-          old='''extern "C" {\n#include "cobra.h"\n}\n'''
-          new='''extern "C" {\n#include "cobra.h"\nint cover_prepare(const char *iso_path);\nint cover_draw(const char *iso_path, int x, int y, int w, int h);\nint cover_state(const char *iso_path);\nint background_load();\nint background_draw();\nvoid background_free();\n}\n'''
-          s=s.replace(old,new,1)
-          old='''    for(int yy=0; yy<h; yy+=4) fill_rect(x,y+yy,w,4,mix_color(c1,c2,yy,h));\n'''
-          new='''    if(cover_draw(m.path.c_str(),x,y,w,h)) {\n        std::string title=clean_title(m.name);\n        int band_h=h/3; fill_rect(x,y+h-band_h,w,band_h,0xE6070D16);\n        draw_wrapped(x+10,y+h-band_h+10,w-20,title,1,0xFFF5FAFF,2);\n        char usb_real[32]; snprintf(usb_real,sizeof(usb_real),"USB %03d",m.usb_id);\n        draw_text(x+10,y+h-28,usb_real,1,0xFF71DCFF,16); return;\n    }\n    for(int yy=0; yy<h; yy+=4) fill_rect(x,y+yy,w,4,mix_color(c1,c2,yy,h));\n'''
-          s=s.replace(old,new,1)
-          s=s.replace('draw_text(x+20,base+102,"PORTADA   AUTO CINEMA",1,MUTED,40);','draw_text(x+20,base+102,"PORTADA   ISO / INTERNET",1,MUTED,40);',1)
-          s=s.replace('''static void draw_background()\n{\n    int sw=(int)get_screen_width(), sh=(int)get_screen_height();''','''static void draw_background()\n{\n    if(background_draw()) return;\n    int sw=(int)get_screen_width(), sh=(int)get_screen_height();''',1)
-          s=s.replace('''    load_font();\n''','''    load_font();\n    background_load();\n''',1)
-          s=s.replace('''        p_up=up; p_down=down; p_left=left; p_right=right; p_x=x; p_o=o; p_tri=tri;\n        render_ui();\n''','''        p_up=up; p_down=down; p_left=left; p_right=right; p_x=x; p_o=o; p_tri=tri;\n        if(!g_movies.empty() && (g_frame % 30)==0) {\n            static int cover_slot=0; int first=(g_selected/GRID_PAGE)*GRID_PAGE;\n            int idx=first+(cover_slot++ % GRID_PAGE); if(idx>=(int)g_movies.size()) idx=g_selected;\n            if(idx>=0 && idx<(int)g_movies.size() && cover_state(g_movies[idx].path.c_str())==0) cover_prepare(g_movies[idx].path.c_str());\n        }\n        render_ui();\n''',1)
-          s=s.replace('''    if(g_font) free(g_font);\n    free(host_addr);''','''    background_free();\n    if(g_font) free(g_font);\n    free(host_addr);''',1)
-          p.write_text(s)
-
-          p=Path('source/cover_udf.cpp'); s=p.read_text()
-          s=s.replace('''static std::vector<CoverEntry> g_covers;''','''static std::vector<CoverEntry> g_covers;\nextern "C" int cover_net_fetch(const char *iso_path, u32 *out, int count);''',1)
-          s=s.replace('''    if(ok) { entry.state=1; save_disk_cache(iso_path,entry.pixels); return 1; }\n    entry.pixels.clear();\n    entry.state=2;\n    return 0;''','''    if(ok) { entry.state=1; save_disk_cache(iso_path,entry.pixels); return 1; }\n    entry.pixels.resize(COVER_W*COVER_H);\n    if(cover_net_fetch(iso_path,&entry.pixels[0],COVER_W*COVER_H)) { entry.state=1; save_disk_cache(iso_path,entry.pixels); return 1; }\n    entry.pixels.clear(); entry.state=2; return 0;''',1)
-          p.write_text(s)
-          PY
+      - name: Aplicar cambios V12
+        run: python3 scripts/v12_patch.py
 
       - name: Preparar raw_iso.sprx
         run: |
           curl -fL https://raw.githubusercontent.com/aldostools/IRISMAN/master/rawseciso/bin2c/rawseciso.c -o /tmp/rawseciso.c
-          python3 - <<'PY'
-          import re
-          from pathlib import Path
-          s=Path('/tmp/rawseciso.c').read_text(); m=re.search(r'raw_iso_sprx\[[^\]]+\]\s*=\s*\{(.*?)\};',s,re.S)
-          if not m: raise SystemExit('No se encontro raw_iso_sprx')
-          Path('pkgfiles/USRDIR/raw_iso.sprx').write_bytes(bytes(int(x,16) for x in re.findall(r'0x([0-9A-Fa-f]{2})',m.group(1))))
-          PY
+          python3 -c "import re,pathlib; s=pathlib.Path('/tmp/rawseciso.c').read_text(); m=re.search(r'raw_iso_sprx\\[[^\\]]+\\]\\s*=\\s*\\{(.*?)\\};',s,re.S); assert m; pathlib.Path('pkgfiles/USRDIR/raw_iso.sprx').write_bytes(bytes(int(x,16) for x in re.findall(r'0x([0-9A-Fa-f]{2})',m.group(1))))"
 
-      - name: Crear arte V11 y tipografia
+      - name: Crear arte V12
         run: |
-          python3 - <<'PY'
-          from pathlib import Path
-          from PIL import Image,ImageDraw,ImageFont,ImageFilter
-          import math,random
-          Path('pkgfiles/USRDIR').mkdir(parents=True,exist_ok=True)
-          font_path='/usr/share/fonts/truetype/dejavu/DejaVuSansCondensed-Bold.ttf'
-          FW,FH=16,24; fnt=ImageFont.truetype(font_path,18); raw=bytearray()
-          for code in range(32,127):
-              im=Image.new('L',(FW,FH),0); d=ImageDraw.Draw(im); ch=chr(code); box=d.textbbox((0,0),ch,font=fnt)
-              d.text((max(0,(FW-(box[2]-box[0]))//2-box[0]),max(0,(FH-(box[3]-box[1]))//2-box[1]-1)),ch,font=fnt,fill=255); raw.extend(im.tobytes())
-          Path('pkgfiles/USRDIR/FONT.RAW').write_bytes(raw)
-
-          def grad(w,h,a,b):
-              im=Image.new('RGB',(w,h)); px=im.load()
-              for y in range(h):
-                  t=y/(h-1); c=tuple(int(a[i]*(1-t)+b[i]*t) for i in range(3))
-                  for x in range(w): px[x,y]=c
-              return im
-
-          # Fondo interno: ciudad nocturna comic roja/azul, telaranas graficas y centro oscuro para UI.
-          bg=grad(1920,1080,(4,8,18),(15,10,26)); d=ImageDraw.Draw(bg,'RGBA'); random.seed(8)
-          for i in range(55):
-              x=i*38+random.randint(-20,10); w=random.randint(35,85); h=random.randint(180,620); y=900-h
-              col=(8,24,48,255) if i%2 else (22,12,36,255); d.rectangle((x,y,x+w,900),fill=col)
-              for yy in range(y+18,900-20,34):
-                  for xx in range(x+12,x+w-8,24):
-                      if random.random()>.45: d.rectangle((xx,yy,xx+8,yy+12),fill=(20,95,170,120) if i%3 else (220,28,48,125))
-          d.rectangle((0,900,1920,1080),fill=(2,5,12,255))
-          for ox,oy,c in [(0,0,(220,25,50,110)),(1920,0,(30,120,235,100))]:
-              for r in range(120,620,80): d.arc((ox-r,oy-r,ox+r,oy+r),0 if ox==0 else 90,90 if ox==0 else 180,fill=c,width=3)
-              for a in range(0,91,15):
-                  rad=math.radians(a if ox==0 else 180-a); d.line((ox,oy,ox+math.cos(rad)*700,oy+math.sin(rad)*700),fill=c,width=2)
-          overlay=Image.new('RGBA',bg.size,(0,0,0,0)); od=ImageDraw.Draw(overlay); od.rectangle((250,90,1670,1000),fill=(0,0,0,75)); bg=Image.alpha_composite(bg.convert('RGBA'),overlay).convert('RGB')
-          bg.save('pkgfiles/USRDIR/APPBG.JPG',quality=88,optimize=True)
-
-          # PIC1: robot gigante original estilo transformable sobre ciudad futurista.
-          pic=grad(1920,1080,(4,20,45),(245,108,32)); d=ImageDraw.Draw(pic,'RGBA')
-          for i in range(38):
-              x=i*52; h=random.randint(110,390); d.rectangle((x,1080-h,x+42,1080),fill=(5,16,28,235));
-          # robot por siluetas metalicas con glow
-          glow=Image.new('RGBA',pic.size,(0,0,0,0)); gd=ImageDraw.Draw(glow)
-          parts=[(145,155,510,380),(205,350,450,660),(155,620,290,1030),(350,620,490,1030),(65,330,185,720),(465,330,585,720)]
-          for box in parts: gd.rounded_rectangle(box,25,fill=(30,105,220,180),outline=(90,220,255,240),width=12)
-          gd.polygon([(245,70),(410,70),(455,170),(205,170)],fill=(18,45,88,255),outline=(90,220,255,255)); gd.polygon([(315,55),(338,10),(365,70)],fill=(90,220,255,255))
-          glow=glow.filter(ImageFilter.GaussianBlur(8)); pic=Image.alpha_composite(pic.convert('RGBA'),glow); d=ImageDraw.Draw(pic,'RGBA')
-          for box in parts: d.rounded_rectangle(box,25,fill=(28,40,58,255),outline=(70,170,255,255),width=5)
-          d.polygon([(245,70),(410,70),(455,170),(205,170)],fill=(34,49,68,255),outline=(75,190,255,255)); d.rectangle((275,105,385,122),fill=(45,220,255,255))
-          ft=ImageFont.truetype(font_path,128); fs=ImageFont.truetype(font_path,42)
-          d.text((720,310),'3D ISO PLAYER',font=ft,fill=(245,250,255,255),stroke_width=3,stroke_fill=(25,70,130,255)); d.text((735,475),'CINEMA LIBRARY',font=fs,fill=(90,220,255,255))
-          pic.convert('RGB').save('pkgfiles/PIC1.PNG',optimize=True)
-
-          icon=grad(320,176,(4,12,26),(20,52,90)); d=ImageDraw.Draw(icon,'RGBA'); f1=ImageFont.truetype(font_path,32); f2=ImageFont.truetype(font_path,14)
-          d.text((38,50),'3D ISO PLAYER',font=f1,fill=(245,250,255,255)); d.text((92,112),'V11 CINEMA',font=f2,fill=(80,220,255,255)); icon.save('pkgfiles/ICON0.PNG',optimize=True)
-          PY
+          base64 -d assets/v12_spiderman_bg.b64 > pkgfiles/USRDIR/APPBG.JPG
+          python3 scripts/v12_art.py
 
       - name: Compilar PKG
         run: |
           ppu-gcc --version
-          test -f "$PORTLIBS/lib/libcurl.a" || find "$PS3DEV" -name 'libcurl.a' -print
           make clean
           make pkg
           ls -lh *.pkg pkgfiles/PIC1.PNG pkgfiles/USRDIR/APPBG.JPG
