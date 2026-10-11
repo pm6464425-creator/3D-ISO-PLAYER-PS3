@@ -42,8 +42,18 @@ struct Movie
     int usb_id;
 };
 
+struct ScanReport
+{
+    int mounted_ports;
+    int mounted_partitions;
+    int bdiso_dirs;
+    int iso_files;
+    int mount_result[8];
+};
+
 static volatile s32 dialog_action = 0;
 static bool app_running = true;
+static bool status_open = false;
 static ntfs_md *g_mounts[8] = {0};
 static int g_mount_count[8] = {0};
 
@@ -67,7 +77,7 @@ static void dialog_handler(msgButton button, void *usrData)
         case MSG_DIALOG_BTN_OK: dialog_action = 1; break;
         case MSG_DIALOG_BTN_NO: dialog_action = 2; break;
         case MSG_DIALOG_BTN_ESCAPE: dialog_action = 3; break;
-        case MSG_DIALOG_BTN_NONE: dialog_action = -1; break;
+        case MSG_DIALOG_BTN_NONE: break;
         default: break;
     }
 }
@@ -87,6 +97,7 @@ static void do_flip()
 
 static int show_ok(const char *text)
 {
+    if(status_open) { msgDialogAbort(); status_open = false; }
     msgType type = (msgType)(MSG_DIALOG_NORMAL | MSG_DIALOG_BTN_OK);
     dialog_action = 0;
     msgDialogOpen2(type, text, dialog_handler, NULL, NULL);
@@ -95,8 +106,28 @@ static int show_ok(const char *text)
     return dialog_action;
 }
 
+static void show_status(const char *text)
+{
+    if(status_open) msgDialogAbort();
+    dialog_action = 0;
+    msgDialogOpen2(MSG_DIALOG_NORMAL, text, dialog_handler, NULL, NULL);
+    status_open = true;
+    for(int i=0;i<4;i++) { do_flip(); usleep(16000); }
+}
+
+static void close_status()
+{
+    if(status_open)
+    {
+        msgDialogAbort();
+        status_open = false;
+        for(int i=0;i<2;i++) do_flip();
+    }
+}
+
 static int show_yes_no(const char *text)
 {
+    if(status_open) { msgDialogAbort(); status_open = false; }
     msgType type = (msgType)(MSG_DIALOG_NORMAL | MSG_DIALOG_BTN_TYPE_YESNO);
     dialog_action = 0;
     msgDialogOpen2(type, text, dialog_handler, NULL, NULL);
@@ -115,41 +146,56 @@ static bool has_iso_ext(const char *name)
     return strcasecmp(name + n - 4, ".iso") == 0;
 }
 
-static std::vector<Movie> scan_movies()
+static std::vector<Movie> scan_movies(ScanReport *report)
 {
     std::vector<Movie> movies;
+    memset(report, 0, sizeof(*report));
+    for(int i=0;i<8;i++) report->mount_result[i] = -999;
 
-    // Dar tiempo al subsistema USB antes de intentar montar.
-    usleep(800000);
+    // Espera inicial real para que el disco termine de enumerarse.
+    for(int i=0;i<12 && app_running;i++) { do_flip(); usleep(100000); }
 
-    for(int usb = 0; usb < 8; ++usb)
+    for(int usb = 0; usb < 8 && app_running; ++usb)
     {
-        g_mounts[usb] = NULL;
-        g_mount_count[usb] = 0;
+        char status[256];
+        snprintf(status, sizeof(status), "3D ISO PLAYER\n\nBuscando películas ISO...\n\nRevisando USB %03d de 007", usb);
+        show_status(status);
 
-        // Importante: no usar PS3_NTFS_IsInserted como filtro previo.
-        // Algunos discos NTFS/MBR pueden no ser reportados a tiempo por esa
-        // comprobación, aunque ntfsMountDevice sí logra montarlos correctamente.
-        for(int intento = 0; intento < 3 && g_mount_count[usb] <= 0; ++intento)
+        // Limpiar cualquier estado viejo del driver antes del intento.
+        PS3_NTFS_Shutdown(usb);
+        usleep(120000);
+
+        g_mounts[usb] = NULL;
+        g_mount_count[usb] = ntfsMountDevice(
+            disc_ntfs[usb],
+            &g_mounts[usb],
+            NTFS_DEFAULT | NTFS_RECOVER
+        );
+        report->mount_result[usb] = g_mount_count[usb];
+
+        // Segundo intento sólo si el primero falló; evita esperas innecesarias.
+        if(g_mount_count[usb] <= 0)
         {
-            if(intento > 0) usleep(400000);
+            if(g_mounts[usb]) { free(g_mounts[usb]); g_mounts[usb] = NULL; }
+            PS3_NTFS_Shutdown(usb);
+            usleep(180000);
             g_mount_count[usb] = ntfsMountDevice(
                 disc_ntfs[usb],
                 &g_mounts[usb],
-                NTFS_DEFAULT | NTFS_RECOVER | NTFS_READ_ONLY
+                NTFS_DEFAULT | NTFS_RECOVER
             );
+            report->mount_result[usb] = g_mount_count[usb];
         }
 
         if(g_mount_count[usb] <= 0 || !g_mounts[usb])
         {
-            if(g_mounts[usb])
-            {
-                free(g_mounts[usb]);
-                g_mounts[usb] = NULL;
-            }
+            if(g_mounts[usb]) { free(g_mounts[usb]); g_mounts[usb] = NULL; }
             g_mount_count[usb] = 0;
             continue;
         }
+
+        report->mounted_ports++;
+        report->mounted_partitions += g_mount_count[usb];
 
         for(int p = 0; p < g_mount_count[usb]; ++p)
         {
@@ -157,8 +203,16 @@ static std::vector<Movie> scan_movies()
 
             std::string root = std::string(g_mounts[usb][p].name) + ":/BDISO";
             DIR_ITER *dir = ps3ntfs_diropen(root.c_str());
+            if(!dir)
+            {
+                // Algunos nombres de montaje pueden venir con ':' al final.
+                std::string n = g_mounts[usb][p].name;
+                if(!n.empty() && n[n.size()-1] == ':') root = n + "/BDISO";
+                dir = ps3ntfs_diropen(root.c_str());
+            }
             if(!dir) continue;
 
+            report->bdiso_dirs++;
             char filename[1024];
             struct stat st;
             while(ps3ntfs_dirnext(dir, filename, &st) == 0)
@@ -171,12 +225,14 @@ static std::vector<Movie> scan_movies()
                 m.path = root + "/" + filename;
                 m.usb_id = usb;
                 movies.push_back(m);
+                report->iso_files++;
                 if(movies.size() >= 256) break;
             }
             ps3ntfs_dirclose(dir);
         }
     }
 
+    close_status();
     std::sort(movies.begin(), movies.end(), [](const Movie &a, const Movie &b) {
         return strcasecmp(a.name.c_str(), b.name.c_str()) < 0;
     });
@@ -261,8 +317,6 @@ int main(int argc, char *argv[])
     ioPadInit(7);
     sysUtilRegisterCallback(SYSUTIL_EVENT_SLOT0, sysutil_callback, NULL);
 
-    show_ok("3D ISO PLAYER\n\nBuscando películas Blu-ray ISO en dispositivos USB NTFS...");
-
     if(!is_cobra_based())
     {
         show_ok("No se detectó Cobra.\n\nEste programa requiere un CFW con Cobra habilitado.");
@@ -270,10 +324,19 @@ int main(int argc, char *argv[])
         return 2;
     }
 
-    std::vector<Movie> movies = scan_movies();
+    show_status("3D ISO PLAYER\n\nBuscando películas ISO en discos USB NTFS...\n\nNo desconectes el disco.");
+
+    ScanReport report;
+    std::vector<Movie> movies = scan_movies(&report);
     if(movies.empty())
     {
-        show_ok("No se encontraron películas.\n\nConecta un disco USB NTFS/MBR y guarda las ISO directamente en:\n\nBDISO\n\nEjemplo: BDISO/Avatar 3D.iso");
+        char msg[1200];
+        snprintf(msg, sizeof(msg),
+            "No se encontraron películas ISO.\n\nDiagnóstico:\nUSB NTFS montados: %d\nParticiones detectadas: %d\nCarpetas BDISO encontradas: %d\nArchivos ISO encontrados: %d\n\nResultado por puerto USB 000-007:\n%d, %d, %d, %d, %d, %d, %d, %d\n\nLa carpeta debe estar en la raíz: BDISO/archivo.iso",
+            report.mounted_ports, report.mounted_partitions, report.bdiso_dirs, report.iso_files,
+            report.mount_result[0], report.mount_result[1], report.mount_result[2], report.mount_result[3],
+            report.mount_result[4], report.mount_result[5], report.mount_result[6], report.mount_result[7]);
+        show_ok(msg);
         cleanup_ntfs();
         return 0;
     }
@@ -295,11 +358,10 @@ int main(int argc, char *argv[])
         return 0;
     }
 
-    char mounting[1400];
-    snprintf(mounting, sizeof(mounting), "Preparando Blu-ray 3D...\n\n%s\n\nPulsa Aceptar y espera unos segundos.", movies[selected].name.c_str());
-    show_ok(mounting);
-
+    show_status("Preparando Blu-ray 3D...\n\nMontando la ISO. Espera unos segundos.");
     int ret = mount_bd_iso(movies[selected]);
+    close_status();
+
     if(ret != 0)
     {
         char err[512];
