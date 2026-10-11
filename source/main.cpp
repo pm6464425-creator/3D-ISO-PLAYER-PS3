@@ -22,7 +22,7 @@ extern "C" {
 }
 
 #define APP_TITLE "3D ISO PLAYER"
-#define RAWISO_PATH "/dev_hdd0/game/3DISO001/USRDIR/raw_iso.sprx"
+#define RAWISO_PATH "/dev_hdd0/game/3DISO0001/USRDIR/raw_iso.sprx"
 #define BDPLAYER_PATH "/dev_flash/bdplayer/bdp_BDMV.self"
 
 typedef struct
@@ -152,7 +152,6 @@ static std::vector<Movie> scan_movies(ScanReport *report)
     memset(report, 0, sizeof(*report));
     for(int i=0;i<8;i++) report->mount_result[i] = -999;
 
-    // Espera inicial real para que el disco termine de enumerarse.
     for(int i=0;i<12 && app_running;i++) { do_flip(); usleep(100000); }
 
     for(int usb = 0; usb < 8 && app_running; ++usb)
@@ -161,29 +160,19 @@ static std::vector<Movie> scan_movies(ScanReport *report)
         snprintf(status, sizeof(status), "3D ISO PLAYER\n\nBuscando películas ISO...\n\nRevisando USB %03d de 007", usb);
         show_status(status);
 
-        // Limpiar cualquier estado viejo del driver antes del intento.
         PS3_NTFS_Shutdown(usb);
         usleep(120000);
 
         g_mounts[usb] = NULL;
-        g_mount_count[usb] = ntfsMountDevice(
-            disc_ntfs[usb],
-            &g_mounts[usb],
-            NTFS_DEFAULT | NTFS_RECOVER
-        );
+        g_mount_count[usb] = ntfsMountDevice(disc_ntfs[usb], &g_mounts[usb], NTFS_DEFAULT | NTFS_RECOVER);
         report->mount_result[usb] = g_mount_count[usb];
 
-        // Segundo intento sólo si el primero falló; evita esperas innecesarias.
         if(g_mount_count[usb] <= 0)
         {
             if(g_mounts[usb]) { free(g_mounts[usb]); g_mounts[usb] = NULL; }
             PS3_NTFS_Shutdown(usb);
             usleep(180000);
-            g_mount_count[usb] = ntfsMountDevice(
-                disc_ntfs[usb],
-                &g_mounts[usb],
-                NTFS_DEFAULT | NTFS_RECOVER
-            );
+            g_mount_count[usb] = ntfsMountDevice(disc_ntfs[usb], &g_mounts[usb], NTFS_DEFAULT | NTFS_RECOVER);
             report->mount_result[usb] = g_mount_count[usb];
         }
 
@@ -205,7 +194,6 @@ static std::vector<Movie> scan_movies(ScanReport *report)
             DIR_ITER *dir = ps3ntfs_diropen(root.c_str());
             if(!dir)
             {
-                // Algunos nombres de montaje pueden venir con ':' al final.
                 std::string n = g_mounts[usb][p].name;
                 if(!n.empty() && n[n.size()-1] == ':') root = n + "/BDISO";
                 dir = ps3ntfs_diropen(root.c_str());
@@ -259,6 +247,10 @@ static void cleanup_ntfs()
 
 static int mount_bd_iso(const Movie &movie)
 {
+    struct stat st;
+    if(stat(RAWISO_PATH, &st) != 0)
+        return -103;
+
     void *plugin_args = memalign(128, 0x10000);
     uint32_t *sections = (uint32_t*)malloc(MAX_SECTIONS * sizeof(uint32_t));
     uint32_t *section_sizes = (uint32_t*)malloc(MAX_SECTIONS * sizeof(uint32_t));
@@ -290,6 +282,7 @@ static int mount_bd_iso(const Movie &movie)
     memcpy((uint8_t*)plugin_args + sizeof(rawseciso_args) + parts * sizeof(uint32_t), section_sizes, parts * sizeof(uint32_t));
 
     cobra_unload_vsh_plugin(0);
+    usleep(100000);
     int ret = cobra_load_vsh_plugin(0, (char*)RAWISO_PATH, plugin_args, 0x10000);
 
     free(plugin_args);
@@ -358,22 +351,29 @@ int main(int argc, char *argv[])
         return 0;
     }
 
-    show_status("Preparando Blu-ray 3D...\n\nMontando la ISO. Espera unos segundos.");
+    show_status("Preparando Blu-ray 3D...\n\nMontando la ISO mediante Cobra. Espera unos segundos.");
     int ret = mount_bd_iso(movies[selected]);
     close_status();
 
     if(ret != 0)
     {
-        char err[512];
-        if(ret == -102)
+        char err[768];
+        if(ret == -103)
+            snprintf(err, sizeof(err), "Falta el módulo raw_iso.sprx.\n\nRuta esperada:\n%s\n\nReinstala esta versión del PKG.", RAWISO_PATH);
+        else if(ret == -102)
             snprintf(err, sizeof(err), "No se pudo montar la ISO porque está demasiado fragmentada en el disco NTFS.\n\nVuelve a copiar la película al disco.");
+        else if(ret == -101)
+            snprintf(err, sizeof(err), "No se pudieron obtener los sectores físicos de la ISO en NTFS.");
+        else if((uint32_t)ret == 0x80010002)
+            snprintf(err, sizeof(err), "Cobra devolvió 0x80010002 al cargar raw_iso.sprx.\n\nEl archivo existe, pero Cobra no pudo cargarlo desde:\n%s", RAWISO_PATH);
         else
-            snprintf(err, sizeof(err), "No se pudo montar la película.\n\nError: 0x%08X", ret);
+            snprintf(err, sizeof(err), "No se pudo montar la película.\n\nError Cobra: 0x%08X", ret);
         show_ok(err);
         cleanup_ntfs();
         return 3;
     }
 
+    show_status("ISO montada correctamente.\n\nAbriendo el reproductor Blu-ray...");
     launch_bluray_player();
 
     cleanup_ntfs();
