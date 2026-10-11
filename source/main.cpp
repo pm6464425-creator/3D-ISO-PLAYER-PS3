@@ -119,16 +119,42 @@ static std::vector<Movie> scan_movies()
 {
     std::vector<Movie> movies;
 
+    // Dar tiempo al subsistema USB antes de intentar montar.
+    usleep(800000);
+
     for(int usb = 0; usb < 8; ++usb)
     {
-        if(!PS3_NTFS_IsInserted(usb)) continue;
-
         g_mounts[usb] = NULL;
-        g_mount_count[usb] = ntfsMountDevice(disc_ntfs[usb], &g_mounts[usb], NTFS_DEFAULT | NTFS_RECOVER | NTFS_READ_ONLY);
-        if(g_mount_count[usb] <= 0) continue;
+        g_mount_count[usb] = 0;
+
+        // Importante: no usar PS3_NTFS_IsInserted como filtro previo.
+        // Algunos discos NTFS/MBR pueden no ser reportados a tiempo por esa
+        // comprobación, aunque ntfsMountDevice sí logra montarlos correctamente.
+        for(int intento = 0; intento < 3 && g_mount_count[usb] <= 0; ++intento)
+        {
+            if(intento > 0) usleep(400000);
+            g_mount_count[usb] = ntfsMountDevice(
+                disc_ntfs[usb],
+                &g_mounts[usb],
+                NTFS_DEFAULT | NTFS_RECOVER | NTFS_READ_ONLY
+            );
+        }
+
+        if(g_mount_count[usb] <= 0 || !g_mounts[usb])
+        {
+            if(g_mounts[usb])
+            {
+                free(g_mounts[usb]);
+                g_mounts[usb] = NULL;
+            }
+            g_mount_count[usb] = 0;
+            continue;
+        }
 
         for(int p = 0; p < g_mount_count[usb]; ++p)
         {
+            if(!g_mounts[usb][p].name[0]) continue;
+
             std::string root = std::string(g_mounts[usb][p].name) + ":/BDISO";
             DIR_ITER *dir = ps3ntfs_diropen(root.c_str());
             if(!dir) continue;
@@ -247,7 +273,7 @@ int main(int argc, char *argv[])
     std::vector<Movie> movies = scan_movies();
     if(movies.empty())
     {
-        show_ok("No se encontraron películas.\n\nConecta un disco USB NTFS y guarda las ISO en la carpeta:\n\nBDISO");
+        show_ok("No se encontraron películas.\n\nConecta un disco USB NTFS/MBR y guarda las ISO directamente en:\n\nBDISO\n\nEjemplo: BDISO/Avatar 3D.iso");
         cleanup_ntfs();
         return 0;
     }
