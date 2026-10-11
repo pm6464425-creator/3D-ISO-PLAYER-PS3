@@ -27,7 +27,7 @@ LDFLAGS     := $(MACHDEP) -Wl,-Map,$(notdir $@).map
 LIBS        := $(TOPDIR)/third_party/lib/libcobra.a \
                $(TOPDIR)/third_party/lib/libfatfs.a \
                $(TOPDIR)/third_party/lib/libntfs_ext.a \
-               -lstdc++ -lz -lrsx -lgcm_sys -lio -lsysutil -lsysfs -lrt -llv2 -lsysmodule -lm
+               -lstdc++ -lcurl -lpolarssl -lnet -lnetctl -lz -lrsx -lgcm_sys -lio -lsysutil -lsysfs -lrt -llv2 -lsysmodule -lm
 
 LIBDIRS     :=
 
