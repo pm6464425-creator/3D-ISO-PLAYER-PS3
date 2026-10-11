@@ -22,23 +22,6 @@
 #define APP_TITLE "3D ISO PLAYER"
 #define RAWISO_PATH "/dev_hdd0/game/3DISO001/USRDIR/raw_iso.sprx"
 #define BDPLAYER_PATH "/dev_flash/bdplayer/bdp_BDMV.self"
-#define MAX_SECTIONS ((0x10000-sizeof(rawseciso_args))/8)
-
-#define USB_MASS_STORAGE_1(n) (0x10300000000000AULL+(n))
-#define USB_MASS_STORAGE_2(n) (0x10300000000001FULL+((n)-6))
-#define USB_MASS_STORAGE(n) (((n) < 6) ? USB_MASS_STORAGE_1(n) : USB_MASS_STORAGE_2(n))
-
-enum DiscEmu
-{
-    EMU_OFF = 0,
-    EMU_PS3,
-    EMU_PS2_DVD,
-    EMU_PS2_CD,
-    EMU_PSX,
-    EMU_BD,
-    EMU_DVD,
-    EMU_MAX
-};
 
 typedef struct
 {
@@ -47,6 +30,8 @@ typedef struct
     uint32_t num_sections;
     uint32_t num_tracks;
 } __attribute__((packed)) rawseciso_args;
+
+#define MAX_SECTIONS ((int)((0x10000-sizeof(rawseciso_args))/8))
 
 struct Movie
 {
@@ -71,13 +56,13 @@ static const DISC_INTERFACE *disc_ntfs[8] = {
     &__io_ntfs_usb007
 };
 
-extern "C" static void dialog_handler(msgButton button, void *usrData)
+extern "C" {
+static void dialog_handler(msgButton button, void *usrData)
 {
     (void)usrData;
     switch(button)
     {
         case MSG_DIALOG_BTN_OK: dialog_action = 1; break;
-        case MSG_DIALOG_BTN_YES: dialog_action = 1; break;
         case MSG_DIALOG_BTN_NO: dialog_action = 2; break;
         case MSG_DIALOG_BTN_ESCAPE: dialog_action = 3; break;
         case MSG_DIALOG_BTN_NONE: dialog_action = -1; break;
@@ -85,10 +70,11 @@ extern "C" static void dialog_handler(msgButton button, void *usrData)
     }
 }
 
-extern "C" static void sysutil_callback(u64 status, u64 param, void *userdata)
+static void sysutil_callback(u64 status, u64 param, void *userdata)
 {
     (void)param; (void)userdata;
     if(status == SYSUTIL_EXIT_GAME) app_running = false;
+}
 }
 
 static void do_flip()
@@ -109,7 +95,7 @@ static int show_ok(const char *text)
 
 static int show_yes_no(const char *text)
 {
-    msgType type = (msgType)(MSG_DIALOG_NORMAL | MSG_DIALOG_BTN_TYPE_YESNO | MSG_DIALOG_DEFAULT_CURSOR_YES);
+    msgType type = (msgType)(MSG_DIALOG_NORMAL | MSG_DIALOG_BTN_TYPE_YESNO);
     dialog_action = 0;
     msgDialogOpen2(type, text, dialog_handler, NULL, NULL);
     while(app_running && !dialog_action) do_flip();
@@ -136,7 +122,7 @@ static std::vector<Movie> scan_movies()
         if(!PS3_NTFS_IsInserted(usb)) continue;
 
         g_mounts[usb] = NULL;
-        g_mount_count[usb] = ntfsMountDevice(disc_ntfs[usb], &g_mounts[usb], NTFS_DEFAULT | NTFS_RECOVER);
+        g_mount_count[usb] = ntfsMountDevice(disc_ntfs[usb], &g_mounts[usb], NTFS_DEFAULT | NTFS_RECOVER | NTFS_READ_ONLY);
         if(g_mount_count[usb] <= 0) continue;
 
         for(int p = 0; p < g_mount_count[usb]; ++p)
@@ -231,16 +217,11 @@ static int mount_bd_iso(const Movie &movie)
 static void launch_bluray_player()
 {
     sleep(2);
-    cleanup_ntfs();
 
     const char *argv[] = { BDPLAYER_PATH, NULL };
-    int ret = sysProcessExitSpawn2(BDPLAYER_PATH, argv, NULL, NULL, 0, 1001, SYS_PROCESS_SPAWN_STACK_SIZE_1M);
-    if(ret != 0)
-    {
-        char msg[256];
-        snprintf(msg, sizeof(msg), "La ISO fue montada, pero el reproductor Blu-ray no pudo iniciarse directamente.\n\nError: 0x%08X", ret);
-        show_ok(msg);
-    }
+    sysProcessExitSpawn2(BDPLAYER_PATH, argv, NULL, NULL, 0, 1001, SYS_PROCESS_SPAWN_STACK_SIZE_1M);
+
+    show_ok("La ISO fue montada, pero el reproductor Blu-ray no pudo iniciarse directamente.");
 }
 
 int main(int argc, char *argv[])
@@ -289,7 +270,7 @@ int main(int argc, char *argv[])
     }
 
     char mounting[1400];
-    snprintf(mounting, sizeof(mounting), "Preparando Blu-ray 3D...\n\n%s\n\nEspera unos segundos.", movies[selected].name.c_str());
+    snprintf(mounting, sizeof(mounting), "Preparando Blu-ray 3D...\n\n%s\n\nPulsa Aceptar y espera unos segundos.", movies[selected].name.c_str());
     show_ok(mounting);
 
     int ret = mount_bd_iso(movies[selected]);
@@ -297,7 +278,7 @@ int main(int argc, char *argv[])
     {
         char err[512];
         if(ret == -102)
-            snprintf(err, sizeof(err), "No se pudo montar la ISO porque está demasiado fragmentada en el disco NTFS.\n\nDesfragmenta o vuelve a copiar la película.");
+            snprintf(err, sizeof(err), "No se pudo montar la ISO porque está demasiado fragmentada en el disco NTFS.\n\nVuelve a copiar la película al disco.");
         else
             snprintf(err, sizeof(err), "No se pudo montar la película.\n\nError: 0x%08X", ret);
         show_ok(err);
