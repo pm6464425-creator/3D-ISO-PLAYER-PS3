@@ -23,7 +23,6 @@ extern "C" {
 
 #define APP_TITLE "3D ISO PLAYER"
 #define RAWISO_PATH "/dev_hdd0/game/3DISO0001/USRDIR/raw_iso.sprx"
-#define BDPLAYER_PATH "/dev_flash/bdplayer/bdp_BDMV.self"
 
 typedef struct
 {
@@ -291,12 +290,18 @@ static int mount_bd_iso(const Movie &movie)
     return ret;
 }
 
-static void launch_bluray_player()
+static void exit_to_xmb_after_mount()
 {
-    sleep(2);
-    const char *argv[] = { BDPLAYER_PATH, NULL };
-    sysProcessExitSpawn2(BDPLAYER_PATH, argv, NULL, NULL, 0, 1001, SYS_PROCESS_SPAWN_STACK_SIZE_1M);
-    show_ok("La ISO fue montada, pero el reproductor Blu-ray no pudo iniciarse directamente.");
+    close_status();
+    ioPadEnd();
+    sysUtilUnregisterCallback(SYSUTIL_EVENT_SLOT0);
+    /*
+       IMPORTANTE: no desmontar NTFS ni apagar el puerto USB aquí.
+       raw_iso.sprx necesita seguir accediendo al dispositivo físico una vez
+       que la aplicación sale. Los gestores consolidados cargan rawseciso y
+       terminan el proceso, dejando que VSH/XMB gestione el disco virtual.
+    */
+    exit(0);
 }
 
 int main(int argc, char *argv[])
@@ -314,6 +319,7 @@ int main(int argc, char *argv[])
     {
         show_ok("No se detectó Cobra.\n\nEste programa requiere un CFW con Cobra habilitado.");
         cleanup_ntfs();
+        free(host_addr);
         return 2;
     }
 
@@ -331,6 +337,7 @@ int main(int argc, char *argv[])
             report.mount_result[4], report.mount_result[5], report.mount_result[6], report.mount_result[7]);
         show_ok(msg);
         cleanup_ntfs();
+        free(host_addr);
         return 0;
     }
 
@@ -338,7 +345,7 @@ int main(int argc, char *argv[])
     for(size_t i = 0; i < movies.size() && app_running; ++i)
     {
         char msg[1400];
-        snprintf(msg, sizeof(msg), "Película %u de %u\n\n%s\n\n¿Reproducir esta película?\n\nSí = reproducir     No = siguiente", (unsigned)(i+1), (unsigned)movies.size(), movies[i].name.c_str());
+        snprintf(msg, sizeof(msg), "Película %u de %u\n\n%s\n\n¿Montar esta película?\n\nSí = montar     No = siguiente", (unsigned)(i+1), (unsigned)movies.size(), movies[i].name.c_str());
         int r = show_yes_no(msg);
         if(r == 1) { selected = (int)i; break; }
         if(r < 0) break;
@@ -348,6 +355,7 @@ int main(int argc, char *argv[])
     {
         show_ok("No se seleccionó ninguna película.");
         cleanup_ntfs();
+        free(host_addr);
         return 0;
     }
 
@@ -370,15 +378,16 @@ int main(int argc, char *argv[])
             snprintf(err, sizeof(err), "No se pudo montar la película.\n\nError Cobra: 0x%08X", ret);
         show_ok(err);
         cleanup_ntfs();
+        free(host_addr);
         return 3;
     }
 
-    show_status("ISO montada correctamente.\n\nAbriendo el reproductor Blu-ray...");
-    launch_bluray_player();
+    show_status("ISO montada correctamente.\n\nVolviendo al XMB de forma segura...\n\nNo desconectes el disco USB.");
+    for(int i=0;i<12;i++) { do_flip(); usleep(100000); }
 
-    cleanup_ntfs();
-    ioPadEnd();
-    sysUtilUnregisterCallback(SYSUTIL_EVENT_SLOT0);
-    free(host_addr);
+    /* No lanzar bdp_BDMV.self directamente: hacerlo desde homebrew provoca
+       pantalla negra/bloqueo en algunas versiones de VSH/CFW. */
+    exit_to_xmb_after_mount();
+
     return 0;
 }
