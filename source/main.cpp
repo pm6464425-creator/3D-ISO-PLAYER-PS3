@@ -139,14 +139,14 @@ static bool display_supports_3d()
     return r > 0;
 }
 
-static int force_2d_720p()
+static int force_2d_1080p()
 {
     videoConfiguration cfg;
     memset(&cfg, 0, sizeof(cfg));
-    cfg.resolution = VIDEO_RESOLUTION_720;
+    cfg.resolution = VIDEO_RESOLUTION_1080;
     cfg.format = VIDEO_BUFFER_FORMAT_XRGB;
     cfg.aspect = VIDEO_ASPECT_16_9;
-    cfg.pitch = 1280 * 4;
+    cfg.pitch = 1920 * 4;
     return videoConfigure(VIDEO_PRIMARY, &cfg, NULL, 1);
 }
 
@@ -161,7 +161,7 @@ static PlayMode choose_play_mode(bool has3d)
     if(r < 0) return MODE_AUTO;
     if(r == 1) return MODE_AUTO;
 
-    r = show_yes_no("Selección manual\n\n¿Forzar salida 2D compatible?\n\nSí = 2D 720p\nNo = mantener salida 3D/actual");
+    r = show_yes_no("Selección manual\n\n¿Forzar salida 2D compatible?\n\nSí = 2D 1080p\nNo = mantener salida 3D/actual");
     if(r == 1) return MODE_2D;
     return MODE_3D;
 }
@@ -176,7 +176,7 @@ static std::vector<Movie> scan_movies(ScanReport *report)
 
     for(int usb=0; usb<8 && app_running; ++usb) {
         char status[256];
-        snprintf(status, sizeof(status), "3D ISO PLAYER V6\n\nBuscando películas ISO...\n\nRevisando USB %03d de 007", usb);
+        snprintf(status, sizeof(status), "3D ISO PLAYER V7\n\nBuscando películas ISO...\n\nRevisando USB %03d de 007", usb);
         show_status(status);
 
         PS3_NTFS_Shutdown(usb);
@@ -314,7 +314,7 @@ int main(int argc, char *argv[])
 
     bool has3d = display_supports_3d();
 
-    show_status("3D ISO PLAYER V6\n\nBuscando películas ISO en discos USB NTFS...\n\nNo desconectes el disco.");
+    show_status("3D ISO PLAYER V7\n\nBuscando películas ISO en discos USB NTFS...\n\nNo desconectes el disco.");
     ScanReport report;
     std::vector<Movie> movies = scan_movies(&report);
 
@@ -348,10 +348,10 @@ int main(int argc, char *argv[])
 
     if(mode == MODE_AUTO) {
         show_status(use2d ?
-            "Modo AUTOMÁTICO\n\nNo se detectó salida 3D.\nSe preparará una salida 2D 720p compatible.\n\nMontando ISO..." :
+            "Modo AUTOMÁTICO\n\nNo se detectó salida 3D.\nSe preparará una salida 2D 1080p compatible.\n\nMontando ISO..." :
             "Modo AUTOMÁTICO\n\nSe detectó salida 3D disponible.\nSe conservará la salida HDMI actual.\n\nMontando ISO...");
     } else if(mode == MODE_2D) {
-        show_status("Modo 2D\n\nSe forzará salida estándar 720p antes de volver al XMB.\n\nMontando ISO...");
+        show_status("Modo 2D\n\nSe forzará salida estándar 1080p antes de volver al XMB.\n\nMontando ISO...");
     } else {
         show_status("Modo 3D\n\nSe conservará la salida HDMI/3D actual.\n\nMontando ISO...");
     }
@@ -369,11 +369,11 @@ int main(int argc, char *argv[])
     }
 
     if(use2d) {
-        show_ok("ISO montada correctamente.\n\nSe aplicará salida 2D estándar 720p y volveremos al XMB.\n\nDespués inicia el disco Blu-ray montado.");
+        show_ok("ISO montada correctamente.\n\nSe aplicará salida 2D estándar 1080p y volveremos al XMB.\n\nDespués inicia el disco Blu-ray montado.");
         close_status();
         ioPadEnd();
         sysUtilUnregisterCallback(SYSUTIL_EVENT_SLOT0);
-        force_2d_720p();
+        force_2d_1080p();
         usleep(700000);
         exit(0);
     }
