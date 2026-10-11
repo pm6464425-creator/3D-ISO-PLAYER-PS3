@@ -89,6 +89,9 @@ void init_screen(void *host_addr,u32 size)
     depth_pitch = display_width*sizeof(u32);
     depth_buffer = (u32*)rsxMemalign(64,(display_height*depth_pitch)*2);
     rsxAddressToOffset(depth_buffer,&depth_offset);
+    memset(color_buffer[0], 0, display_height*color_pitch);
+    memset(color_buffer[1], 0, display_height*color_pitch);
+    setRenderTarget(curr_fb);
 }
 
 void waitflip()
@@ -106,4 +109,19 @@ void flip()
     curr_fb ^= 1;
     setRenderTarget(curr_fb);
     first_fb = 0;
+}
+
+u32* get_back_buffer(void)
+{
+    return color_buffer[curr_fb];
+}
+
+u32 get_screen_width(void)
+{
+    return display_width;
+}
+
+u32 get_screen_height(void)
+{
+    return display_height;
 }
