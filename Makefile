@@ -4,6 +4,9 @@ ifeq ($(strip $(PSL1GHT)),)
 $(error "Please set PSL1GHT in your environment")
 endif
 
+TOPDIR ?= $(CURDIR)
+export TOPDIR
+
 include $(PSL1GHT)/ppu_rules
 
 TARGET      := 3disoplayer
@@ -14,16 +17,16 @@ INCLUDES    := include third_party/include
 TITLE       := 3D ISO PLAYER
 APPID       := 3DISO001
 CONTENTID   := UP0001-$(APPID)_00-0000000000000000
-PKGFILES    := pkgfiles
-ICON0       := $(CURDIR)/pkgfiles/ICON0.PNG
+PKGFILES    := $(TOPDIR)/pkgfiles
+ICON0       := $(TOPDIR)/pkgfiles/ICON0.PNG
 
 CFLAGS      := -O2 -Wall -mcpu=cell $(MACHDEP) $(INCLUDE)
 CXXFLAGS    := $(CFLAGS) -fno-exceptions -fno-rtti
 LDFLAGS     := $(MACHDEP) -Wl,-Map,$(notdir $@).map
 
-LIBS        := $(CURDIR)/third_party/lib/libcobra.a \
-               $(CURDIR)/third_party/lib/libfatfs.a \
-               $(CURDIR)/third_party/lib/libntfs_ext.a \
+LIBS        := $(TOPDIR)/third_party/lib/libcobra.a \
+               $(TOPDIR)/third_party/lib/libfatfs.a \
+               $(TOPDIR)/third_party/lib/libntfs_ext.a \
                -lstdc++ -lz -lrsx -lgcm_sys -lio -lsysutil -lrt -llv2 -lsysmodule -lm
 
 LIBDIRS     :=
