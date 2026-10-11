@@ -17,7 +17,9 @@
 
 #include "rsxutil.h"
 #include "ntfs.h"
+extern "C" {
 #include "cobra.h"
+}
 
 #define APP_TITLE "3D ISO PLAYER"
 #define RAWISO_PATH "/dev_hdd0/game/3DISO001/USRDIR/raw_iso.sprx"
@@ -217,10 +219,8 @@ static int mount_bd_iso(const Movie &movie)
 static void launch_bluray_player()
 {
     sleep(2);
-
     const char *argv[] = { BDPLAYER_PATH, NULL };
     sysProcessExitSpawn2(BDPLAYER_PATH, argv, NULL, NULL, 0, 1001, SYS_PROCESS_SPAWN_STACK_SIZE_1M);
-
     show_ok("La ISO fue montada, pero el reproductor Blu-ray no pudo iniciarse directamente.");
 }
 
