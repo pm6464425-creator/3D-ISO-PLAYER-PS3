@@ -12,5 +12,8 @@ void init_screen(void *host_addr,u32 size);
 void flip(void);
 void waitflip(void);
 void setRenderTarget(u32 index);
+u32* get_back_buffer(void);
+u32 get_screen_width(void);
+u32 get_screen_height(void);
 
 #endif
