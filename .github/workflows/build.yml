@@ -1,4 +1,4 @@
-name: Compilar FLOWPS3 V28
+name: Compilar FLOWPS3 V29
 
 on:
   push:
@@ -17,7 +17,7 @@ jobs:
       - name: Instalar dependencias del host
         run: |
           sudo apt-get update
-          sudo apt-get install -y curl jq ca-certificates libelf1 zlib1g libgmp10 libstdc++6 python3-pil fonts-dejavu-core
+          sudo apt-get install -y curl jq ca-certificates libelf1 zlib1g libgmp10 libstdc++6 python3-pil python3-pip python3-tk fonts-dejavu-core
 
       - name: Descargar PS3DEV precompilado actual
         run: |
@@ -85,13 +85,35 @@ jobs:
         run: python3 scripts/v27_patch.py
       - name: Aplicar FLOWPS3 V28
         run: python3 scripts/v28_patch.py
+      - name: Aplicar FLOWPS3 V29
+        run: python3 scripts/v29_patch.py
+
+      - name: Integrar SNES9x 2010 para PS3
+        run: |
+          python3 -m pip install --break-system-packages pycryptodomex customtkinter
+          curl -fL https://raw.githubusercontent.com/AphelionWasTaken/PyKG/main/PyKG.py -o /tmp/PyKG.py
+          curl -fL https://github.com/crystalct/RetroArch_PSX_CE/releases/download/v0.4-beta/RetroArch_Psx-Place_Community_Edition_beta04-20220207.pkg -o /tmp/retroarch-ce.pkg
+          mkdir -p /tmp/retroarch-extract pkgfiles/USRDIR/cores pkgfiles/USRDIR/licenses
+          python3 - <<'PY'
+          import importlib.util
+          from pathlib import Path
+          spec=importlib.util.spec_from_file_location("pykg","/tmp/PyKG.py")
+          mod=importlib.util.module_from_spec(spec)
+          spec.loader.exec_module(mod)
+          mod.extract_pkg(Path("/tmp/retroarch-ce.pkg"),Path("/tmp/retroarch-extract"))
+          PY
+          CORE=$(find /tmp/retroarch-extract -type f -iname 'snes9x2010_libretro_ps3.SELF' -print -quit)
+          test -n "$CORE"
+          cp "$CORE" pkgfiles/USRDIR/cores/snes9x2010_libretro_ps3.SELF
+          curl -fL https://raw.githubusercontent.com/libretro/snes9x2010/master/LICENSE.txt -o pkgfiles/USRDIR/licenses/SNES9X2010-LICENSE.txt
+          ls -lh pkgfiles/USRDIR/cores/snes9x2010_libretro_ps3.SELF pkgfiles/USRDIR/licenses/SNES9X2010-LICENSE.txt
 
       - name: Preparar raw_iso.sprx
         run: |
           curl -fL https://raw.githubusercontent.com/aldostools/IRISMAN/master/rawseciso/bin2c/rawseciso.c -o /tmp/rawseciso.c
           python3 -c "import re,pathlib; s=pathlib.Path('/tmp/rawseciso.c').read_text(); m=re.search(r'raw_iso_sprx\\[[^\\]]+\\]\\s*=\\s*\\{(.*?)\\};',s,re.S); assert m; pathlib.Path('pkgfiles/USRDIR/raw_iso.sprx').write_bytes(bytes(int(x,16) for x in re.findall(r'0x([0-9A-Fa-f]{2})',m.group(1))))"
 
-      - name: Crear arte FLOWPS3 V28
+      - name: Crear arte FLOWPS3 V29
         run: python3 scripts/v17_art.py
 
       - name: Compilar PKG
@@ -99,12 +121,12 @@ jobs:
           ppu-gcc --version
           make clean
           make pkg
-          ls -lh *.pkg pkgfiles/ICON0.PNG pkgfiles/PIC0.PNG pkgfiles/PIC1.PNG pkgfiles/USRDIR/APPBG.JPG
+          ls -lh *.pkg pkgfiles/ICON0.PNG pkgfiles/PIC0.PNG pkgfiles/PIC1.PNG pkgfiles/USRDIR/APPBG.JPG pkgfiles/USRDIR/cores/snes9x2010_libretro_ps3.SELF
 
-      - name: Guardar PKG FLOWPS3 V28
+      - name: Guardar PKG FLOWPS3 V29
         uses: actions/upload-artifact@v4
         with:
-          name: FLOWPS3-V28-PKG
+          name: FLOWPS3-V29-PKG
           path: |
             flowps3.pkg
             flowps3.gnpdrm.pkg
