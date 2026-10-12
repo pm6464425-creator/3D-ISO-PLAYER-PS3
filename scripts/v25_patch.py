@@ -81,24 +81,40 @@ s=s.replace(needle,rep,1)
 
 anchor='static int mount_selected_image(const Movie &movie)\n{\n'
 if anchor not in s: raise SystemExit('mount_selected_image no encontrado')
-backend=r'''static int v25_mount_ps3_folder(const Movie &movie)
+backend=r'''static int v25_sys_map_path(const char *oldpath,const char *newpath)
+{
+    lv2syscall2(35,(uint64_t)oldpath,(uint64_t)newpath);
+    return_to_user_prog(int);
+}
+
+static int v25_mount_ps3_folder(const Movie &movie)
 {
     if(movie.content_type!=1) return -350;
     std::string sfo=movie.path+"/PS3_GAME/PARAM.SFO";
     struct stat st; if(stat(sfo.c_str(),&st)!=0) return -351;
 
+    /* Flujo Cobra de juego en carpeta: limpiar montaje anterior y mapear
+       la raiz del juego como /dev_bdvd. Esta ruta funciona tanto en HDD
+       como en /dev_usb00x FAT32. NTFS carpeta no se expone como /dev_usb. */
     cobra_umount_disc_image();
     cobra_unset_psp_umd();
-    sys_map_path((char*)"/dev_bdvd",NULL);
-    sys_map_path((char*)"/app_home",NULL);
+    v25_sys_map_path("/dev_bdvd",NULL);
+    v25_sys_map_path("//dev_bdvd",NULL);
+    v25_sys_map_path("/app_home",NULL);
+    cobra_send_fake_disc_eject_event();
     usleep(20000);
 
-    char path[MAX_PATH];
-    strncpy(path,movie.path.c_str(),sizeof(path)-1); path[sizeof(path)-1]=0;
-    char tid[32];
-    const char *src=movie.title_id.empty()?"FLOWPS3000":movie.title_id.c_str();
-    strncpy(tid,src,sizeof(tid)-1); tid[sizeof(tid)-1]=0;
-    return wm_cobra_map_game(path,tid);
+    int ret=v25_sys_map_path("/dev_bdvd",movie.path.c_str());
+    if(ret!=0) return ret;
+    v25_sys_map_path("//dev_bdvd",movie.path.c_str());
+    /* Mantener app_home apuntando a PS3_GAME ayuda a los juegos carpeta
+       discless sin alterar licencias ni archivos del juego. */
+    std::string apphome=movie.path+"/PS3_GAME";
+    v25_sys_map_path("/app_home",apphome.c_str());
+
+    cobra_send_fake_disc_insert_event();
+    usleep(20000);
+    return 0;
 }
 
 static int v25_launch_xmb_game(const Movie &movie)
@@ -110,8 +126,7 @@ static int v25_launch_xmb_game(const Movie &movie)
     close_status();
     ioPadEnd();
     sysUtilUnregisterCallback(SYSUTIL_EVENT_SLOT0);
-    /* PSL1GHT declara sysProcessExitSpawn2 como void: si el spawn es aceptado,
-       este proceso es sustituido. No se desactivan ni eluden comprobaciones NPDRM. */
+    /* El firmware sigue aplicando las comprobaciones NPDRM/licencia normales. */
     sysProcessExitSpawn2(eboot.c_str(),NULL,NULL,NULL,0,3071,SYS_PROCESS_SPAWN_STACK_SIZE_1M);
     exit(0);
     return -362;
