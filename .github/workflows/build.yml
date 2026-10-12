@@ -1,4 +1,4 @@
-name: Compilar FLOWPS3 V20
+name: Compilar FLOWPS3 V21
 
 on:
   push:
@@ -69,13 +69,15 @@ jobs:
         run: python3 scripts/v19_patch.py
       - name: Aplicar FLOWPS3 V20
         run: python3 scripts/v20_patch.py
+      - name: Aplicar FLOWPS3 V21
+        run: python3 scripts/v21_patch.py
 
       - name: Preparar raw_iso.sprx
         run: |
           curl -fL https://raw.githubusercontent.com/aldostools/IRISMAN/master/rawseciso/bin2c/rawseciso.c -o /tmp/rawseciso.c
           python3 -c "import re,pathlib; s=pathlib.Path('/tmp/rawseciso.c').read_text(); m=re.search(r'raw_iso_sprx\\[[^\\]]+\\]\\s*=\\s*\\{(.*?)\\};',s,re.S); assert m; pathlib.Path('pkgfiles/USRDIR/raw_iso.sprx').write_bytes(bytes(int(x,16) for x in re.findall(r'0x([0-9A-Fa-f]{2})',m.group(1))))"
 
-      - name: Crear arte FLOWPS3 V20
+      - name: Crear arte FLOWPS3 V21
         run: python3 scripts/v17_art.py
 
       - name: Compilar PKG
@@ -85,10 +87,10 @@ jobs:
           make pkg
           ls -lh *.pkg pkgfiles/ICON0.PNG pkgfiles/PIC0.PNG pkgfiles/PIC1.PNG pkgfiles/USRDIR/APPBG.JPG
 
-      - name: Guardar PKG FLOWPS3 V20
+      - name: Guardar PKG FLOWPS3 V21
         uses: actions/upload-artifact@v4
         with:
-          name: FLOWPS3-V20-PKG
+          name: FLOWPS3-V21-PKG
           path: |
             flowps3.pkg
             flowps3.gnpdrm.pkg
