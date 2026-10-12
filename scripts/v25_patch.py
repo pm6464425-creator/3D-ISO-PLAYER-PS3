@@ -108,18 +108,18 @@ static int v25_launch_xmb_game(const Movie &movie)
     struct stat st; if(stat(eboot.c_str(),&st)!=0) return -361;
 
     close_status();
-    cleanup_ntfs();
     ioPadEnd();
     sysUtilUnregisterCallback(SYSUTIL_EVENT_SLOT0);
-    int ret=sysProcessExitSpawn2(eboot.c_str(),NULL,NULL,NULL,0,3071,SYS_PROCESS_SPAWN_STACK_SIZE_1M);
-    if(ret==0) exit(0);
-    return ret;
+    /* PSL1GHT declara sysProcessExitSpawn2 como void: si el spawn es aceptado,
+       este proceso es sustituido. No se desactivan ni eluden comprobaciones NPDRM. */
+    sysProcessExitSpawn2(eboot.c_str(),NULL,NULL,NULL,0,3071,SYS_PROCESS_SPAWN_STACK_SIZE_1M);
+    exit(0);
+    return -362;
 }
 
 '''
 s=s.replace(anchor,backend+anchor,1)
 
-# Reemplazar de forma robusta las dos ramas placeholder de V15.
 start=s.find('            if(g_category==5 && movie.content_type==2)')
 end=s.find('            int emu=category_emu_mode();',start)
 if start<0 or end<0: raise SystemExit('bloque acciones PS3 V15 no encontrado')
