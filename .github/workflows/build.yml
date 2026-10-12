@@ -1,4 +1,4 @@
-name: Compilar FLOWPS3 V26
+name: Compilar FLOWPS3 V27
 
 on:
   push:
@@ -17,7 +17,7 @@ jobs:
       - name: Instalar dependencias del host
         run: |
           sudo apt-get update
-          sudo apt-get install -y curl jq ca-certificates libelf1 zlib1g libgmp10 libstdc++6 python3-pil fonts-dejavu-core
+          sudo apt-get install -y curl jq ca-certificates libelf1 zlib1g libgmp10 libstdc++6 python3-pil fonts-dejavu-core xz-utils
 
       - name: Descargar PS3DEV precompilado actual
         run: |
@@ -35,7 +35,7 @@ jobs:
           echo "$GITHUB_WORKSPACE/ps3dev/ppu/bin" >> "$GITHUB_PATH"
           echo "$GITHUB_WORKSPACE/ps3dev/spu/bin" >> "$GITHUB_PATH"
 
-      - name: Preparar bibliotecas NTFS Cobra UDF e imagenes
+      - name: Preparar bibliotecas NTFS Cobra UDF imagenes y NPDRM
         run: |
           mkdir -p third_party/include third_party/lib pkgfiles/USRDIR
           curl -fL https://raw.githubusercontent.com/aldostools/IRISMAN/master/include/ntfs.h -o third_party/include/ntfs.h
@@ -50,6 +50,16 @@ jobs:
           curl -fL https://raw.githubusercontent.com/ace20022/libudfread/master/src/udfread.c -o source/udfread.c
           curl -fL https://raw.githubusercontent.com/ace20022/libudfread/master/src/ecma167.c -o source/ecma167.c
           curl -fL https://raw.githubusercontent.com/nothings/stb/master/stb_image.h -o third_party/include/stb_image.h
+
+          # Stub mínimo del firmware para sceNpDrmProcessExitSpawn2.
+          # Se usa sólo como importación; la implementación real está en el firmware PS3.
+          curl -fL https://github.com/FirebirdTA01/PS3DK/releases/download/v0.22.4/ps3dev-ppu.tar.xz -o /tmp/ps3dk-ppu.tar.xz
+          mkdir -p /tmp/ps3dk-np
+          tar -xJf /tmp/ps3dk-ppu.tar.xz -C /tmp/ps3dk-np --wildcards --no-anchored 'libsysutil_np_stub.a'
+          NPSTUB=$(find /tmp/ps3dk-np -name libsysutil_np_stub.a | head -n1)
+          test -n "$NPSTUB"
+          cp "$NPSTUB" third_party/lib/libsysutil_np_stub.a
+          test -s third_party/lib/libsysutil_np_stub.a
 
       - name: Aplicar base V12
         run: python3 scripts/v12_patch.py
@@ -81,13 +91,15 @@ jobs:
         run: python3 scripts/v25_patch.py
       - name: Aplicar FLOWPS3 V26
         run: python3 scripts/v26_patch.py
+      - name: Aplicar FLOWPS3 V27
+        run: python3 scripts/v27_patch.py
 
       - name: Preparar raw_iso.sprx
         run: |
           curl -fL https://raw.githubusercontent.com/aldostools/IRISMAN/master/rawseciso/bin2c/rawseciso.c -o /tmp/rawseciso.c
           python3 -c "import re,pathlib; s=pathlib.Path('/tmp/rawseciso.c').read_text(); m=re.search(r'raw_iso_sprx\\[[^\\]]+\\]\\s*=\\s*\\{(.*?)\\};',s,re.S); assert m; pathlib.Path('pkgfiles/USRDIR/raw_iso.sprx').write_bytes(bytes(int(x,16) for x in re.findall(r'0x([0-9A-Fa-f]{2})',m.group(1))))"
 
-      - name: Crear arte FLOWPS3 V26
+      - name: Crear arte FLOWPS3 V27
         run: python3 scripts/v17_art.py
 
       - name: Compilar PKG
@@ -97,10 +109,10 @@ jobs:
           make pkg
           ls -lh *.pkg pkgfiles/ICON0.PNG pkgfiles/PIC0.PNG pkgfiles/PIC1.PNG pkgfiles/USRDIR/APPBG.JPG
 
-      - name: Guardar PKG FLOWPS3 V26
+      - name: Guardar PKG FLOWPS3 V27
         uses: actions/upload-artifact@v4
         with:
-          name: FLOWPS3-V26-PKG
+          name: FLOWPS3-V27-PKG
           path: |
             flowps3.pkg
             flowps3.gnpdrm.pkg
