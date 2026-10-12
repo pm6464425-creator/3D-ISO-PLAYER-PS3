@@ -3,23 +3,12 @@ from pathlib import Path
 p=Path('source/main.cpp')
 s=p.read_text()
 
-# -----------------------------------------------------------------
 # FLOWPS3 V25 - backend PS3
-# - ISO interno/externo: conserva backend Cobra/rawseciso ya probado.
-# - Carpeta PS3 (GAMES/GAMEZ): usa wm_cobra_map_game de IRISMAN/libcobra.
-# - Instalado XMB: arranca su EBOOT.BIN mediante sysProcessExitSpawn2; el
-#   firmware conserva todas las comprobaciones normales de licencia.
-# - Escanea carpetas PS3 FAT32 externas nativas /dev_usb00x.
-# - Deduplica entradas carpeta/XMB por TITLE_ID cuando es posible.
-# -----------------------------------------------------------------
-
 if '#include <sys/process.h>' not in s:
     anchor='#include <sys/stat.h>\n'
     if anchor not in s: raise SystemExit('include sys/stat no encontrado')
     s=s.replace(anchor,anchor+'#include <sys/process.h>\n',1)
 
-# Escaneo de juegos carpeta en USB FAT32 nativo. NTFS carpeta no se mapea por
-# syscall 35; para NTFS PS3 se mantiene ISO/rawseciso.
 marker='static void add_xmb_games(std::vector<Movie> &fresh)\n'
 if marker not in s: raise SystemExit('add_xmb_games no encontrado')
 helper=r'''static void v25_add_external_folder_games(std::vector<Movie> &fresh)
@@ -55,14 +44,8 @@ helper=r'''static void v25_add_external_folder_games(std::vector<Movie> &fresh)
 
 static int v25_ps3_entry_priority(const Movie &m)
 {
-    if(m.content_type==0) {
-        if(m.path.find("/dev_hdd0/PS3ISO/")==0) return 0;
-        return 1;
-    }
-    if(m.content_type==1) {
-        if(m.path.find("/dev_hdd0/")==0) return 2;
-        return 3;
-    }
+    if(m.content_type==0) return m.path.find("/dev_hdd0/PS3ISO/")==0?0:1;
+    if(m.content_type==1) return m.path.find("/dev_hdd0/")==0?2:3;
     if(m.content_type==2) return 4;
     return 9;
 }
@@ -74,9 +57,8 @@ static void v25_dedupe_ps3(std::vector<Movie> &items)
         Movie m=items[i];
         if(m.title_id.empty()) { out.push_back(m); continue; }
         int found=-1;
-        for(size_t j=0;j<out.size();j++) {
+        for(size_t j=0;j<out.size();j++)
             if(!out[j].title_id.empty() && !strcasecmp(out[j].title_id.c_str(),m.title_id.c_str())) { found=(int)j; break; }
-        }
         if(found<0) out.push_back(m);
         else if(v25_ps3_entry_priority(m)<v25_ps3_entry_priority(out[found])) out[found]=m;
     }
@@ -86,7 +68,6 @@ static void v25_dedupe_ps3(std::vector<Movie> &items)
 '''
 s=s.replace(marker,helper+marker,1)
 
-# Añadir escaneo USB carpeta y dedupe justo antes del sort final del rebuild.
 needle='    v17_add_internal_for_category(fresh);\n\n    std::sort(fresh.begin(),fresh.end(),[](const Movie&a,const Movie&b){int n=strcasecmp(a.name.c_str(),b.name.c_str());return n? n<0:a.source<b.source;});'
 rep='''    v17_add_internal_for_category(fresh);
     if(g_category==5) {
@@ -98,8 +79,6 @@ rep='''    v17_add_internal_for_category(fresh);
 if needle not in s: raise SystemExit('sort final V17 no encontrado')
 s=s.replace(needle,rep,1)
 
-# Backend de juego carpeta basado en wm_cobra_map_game de IRISMAN. La propia
-# libcobra descargada en el workflow exporta esta funcion.
 anchor='static int mount_selected_image(const Movie &movie)\n{\n'
 if anchor not in s: raise SystemExit('mount_selected_image no encontrado')
 backend=r'''static int v25_mount_ps3_folder(const Movie &movie)
@@ -108,7 +87,6 @@ backend=r'''static int v25_mount_ps3_folder(const Movie &movie)
     std::string sfo=movie.path+"/PS3_GAME/PARAM.SFO";
     struct stat st; if(stat(sfo.c_str(),&st)!=0) return -351;
 
-    /* Limpiar cualquier montaje anterior igual que IRISMAN. */
     cobra_umount_disc_image();
     cobra_unset_psp_umd();
     sys_map_path((char*)"/dev_bdvd",NULL);
@@ -120,7 +98,6 @@ backend=r'''static int v25_mount_ps3_folder(const Movie &movie)
     char tid[32];
     const char *src=movie.title_id.empty()?"FLOWPS3000":movie.title_id.c_str();
     strncpy(tid,src,sizeof(tid)-1); tid[sizeof(tid)-1]=0;
-
     return wm_cobra_map_game(path,tid);
 }
 
@@ -130,8 +107,6 @@ static int v25_launch_xmb_game(const Movie &movie)
     std::string eboot=movie.path+"/USRDIR/EBOOT.BIN";
     struct stat st; if(stat(eboot.c_str(),&st)!=0) return -361;
 
-    /* No se alteran licencias/NPDRM. El CFW/firmware decide si el titulo es
-       ejecutable exactamente igual que desde el XMB. */
     close_status();
     cleanup_ntfs();
     ioPadEnd();
@@ -144,10 +119,10 @@ static int v25_launch_xmb_game(const Movie &movie)
 '''
 s=s.replace(anchor,backend+anchor,1)
 
-# Sustituir los mensajes placeholder de V15 por ejecución real.
-old='''            if(g_category==5 && movie.content_type==2) { show_ok("Juego XMB detectado correctamente.\n\nEl lanzamiento directo de instalaciones XMB se activara tras validar el metodo seguro en tu CFW."); wait_buttons_release(); p_x=x; render_ui(); usleep(16000); continue; }
-            if(g_category==5 && movie.content_type==1) { show_ok("Juego en carpeta detectado correctamente.\n\nFLOWPS3 lo ha encontrado en la biblioteca multiMAN. El mapeo de carpeta se validara en la siguiente prueba."); wait_buttons_release(); p_x=x; render_ui(); usleep(16000); continue; }
-'''
+# Reemplazar de forma robusta las dos ramas placeholder de V15.
+start=s.find('            if(g_category==5 && movie.content_type==2)')
+end=s.find('            int emu=category_emu_mode();',start)
+if start<0 or end<0: raise SystemExit('bloque acciones PS3 V15 no encontrado')
 new=r'''            if(g_category==5 && movie.content_type==2) {
                 int xr=v25_launch_xmb_game(movie);
                 char msg[512]; snprintf(msg,sizeof(msg),"No se pudo iniciar la instalacion XMB.\n\nCodigo: 0x%08X\n\nEl firmware mantiene sus comprobaciones normales de licencia.",xr);
@@ -161,8 +136,7 @@ new=r'''            if(g_category==5 && movie.content_type==2) {
                 show_ok(msg); wait_buttons_release(); p_x=x; render_ui(); usleep(16000); continue;
             }
 '''
-if old not in s: raise SystemExit('placeholders PS3 V15 no encontrados')
-s=s.replace(old,new,1)
+s=s[:start]+new+s[end:]
 
 s=s.replace('"V24"','"V25"')
 p.write_text(s)
