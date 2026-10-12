@@ -1,4 +1,4 @@
-name: Compilar FLOWPS3 V14
+name: Compilar FLOWPS3 V15
 
 on:
   push:
@@ -51,24 +51,25 @@ jobs:
           curl -fL https://raw.githubusercontent.com/ace20022/libudfread/master/src/ecma167.c -o source/ecma167.c
           curl -fL https://raw.githubusercontent.com/nothings/stb/master/stb_image.h -o third_party/include/stb_image.h
 
-      - name: Aplicar cambios V12
+      - name: Aplicar base V12
         run: python3 scripts/v12_patch.py
 
-      - name: Aplicar cambios V13 XMB
+      - name: Aplicar base XMB V13
         run: python3 scripts/v13_patch.py
 
-      - name: Aplicar cambios FLOWPS3 V14
+      - name: Aplicar FLOWPS3 V14
         run: python3 scripts/v14_patch.py
+
+      - name: Aplicar FLOWPS3 V15
+        run: python3 scripts/v15_patch.py
 
       - name: Preparar raw_iso.sprx
         run: |
           curl -fL https://raw.githubusercontent.com/aldostools/IRISMAN/master/rawseciso/bin2c/rawseciso.c -o /tmp/rawseciso.c
           python3 -c "import re,pathlib; s=pathlib.Path('/tmp/rawseciso.c').read_text(); m=re.search(r'raw_iso_sprx\\[[^\\]]+\\]\\s*=\\s*\\{(.*?)\\};',s,re.S); assert m; pathlib.Path('pkgfiles/USRDIR/raw_iso.sprx').write_bytes(bytes(int(x,16) for x in re.findall(r'0x([0-9A-Fa-f]{2})',m.group(1))))"
 
-      - name: Crear arte FLOWPS3
-        run: |
-          base64 -d assets/v12_spiderman_bg.b64 > pkgfiles/USRDIR/APPBG.JPG
-          python3 scripts/v12_art.py
+      - name: Crear arte FLOWPS3 V15
+        run: python3 scripts/v15_art.py
 
       - name: Compilar PKG
         run: |
@@ -77,10 +78,10 @@ jobs:
           make pkg
           ls -lh *.pkg pkgfiles/PIC1.PNG pkgfiles/USRDIR/APPBG.JPG
 
-      - name: Guardar PKG FLOWPS3 V14
+      - name: Guardar PKG FLOWPS3 V15
         uses: actions/upload-artifact@v4
         with:
-          name: FLOWPS3-V14-PKG
+          name: FLOWPS3-V15-PKG
           path: |
             flowps3.pkg
             flowps3.gnpdrm.pkg
