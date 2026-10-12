@@ -20,12 +20,12 @@ new=r'''static int v21_mount_ps2_internal(const Movie &movie)
     struct stat st;
     if(stat(movie.path.c_str(),&st)!=0 || st.st_size<=0) return -262;
 
-    char storage[32][MAX_PATH];
-    char *files[32];
+    char storage[64][MAX_PATH];
+    char *files[64];
     memset(storage,0,sizeof(storage));
     memset(files,0,sizeof(files));
 
-    int n=collect_split_files(movie.path,(char (*)[MAX_PATH])storage,(char **)files);
+    int n=collect_split_files(movie.path,storage,files);
     if(n<=0) return -201;
     if(n>32) n=32; /* Cobra limita PS2 a 32 partes */
 
