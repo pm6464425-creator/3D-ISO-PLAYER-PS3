@@ -54,12 +54,15 @@ jobs:
       - name: Aplicar cambios V12
         run: python3 scripts/v12_patch.py
 
+      - name: Aplicar cambios V13 XMB
+        run: python3 scripts/v13_patch.py
+
       - name: Preparar raw_iso.sprx
         run: |
           curl -fL https://raw.githubusercontent.com/aldostools/IRISMAN/master/rawseciso/bin2c/rawseciso.c -o /tmp/rawseciso.c
           python3 -c "import re,pathlib; s=pathlib.Path('/tmp/rawseciso.c').read_text(); m=re.search(r'raw_iso_sprx\\[[^\\]]+\\]\\s*=\\s*\\{(.*?)\\};',s,re.S); assert m; pathlib.Path('pkgfiles/USRDIR/raw_iso.sprx').write_bytes(bytes(int(x,16) for x in re.findall(r'0x([0-9A-Fa-f]{2})',m.group(1))))"
 
-      - name: Crear arte V12
+      - name: Crear arte V13
         run: |
           base64 -d assets/v12_spiderman_bg.b64 > pkgfiles/USRDIR/APPBG.JPG
           python3 scripts/v12_art.py
@@ -74,7 +77,7 @@ jobs:
       - name: Guardar PKG
         uses: actions/upload-artifact@v4
         with:
-          name: 3D-ISO-PLAYER-PS3-PKG
+          name: 3D-ISO-PLAYER-PS3-V13-PKG
           path: |
             3disoplayer.pkg
             3disoplayer.gnpdrm.pkg
