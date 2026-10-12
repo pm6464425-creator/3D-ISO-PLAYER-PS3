@@ -8,13 +8,15 @@ s=p.read_text()
 # el firmware dispone de sceNpDrmProcessExitSpawn2, que conserva las
 # comprobaciones normales de licencia y realiza el cambio de proceso.
 
-# Declaración mínima para no mezclar headers completos de otro SDK.
 inc='#include <sys/process.h>\n'
 if inc not in s:
     raise SystemExit('include sys/process no encontrado')
+if '#include <sysmodule/sysmodule.h>' not in s:
+    s=s.replace(inc,inc+'#include <sysmodule/sysmodule.h>\n',1)
+
 decl='''\nextern "C" int sceNpDrmProcessExitSpawn2(const void *k_licensee, const char *path, const char *argv[], const char *envp[], unsigned int data, size_t data_size, int prio, unsigned long long flags);\n'''
 if 'sceNpDrmProcessExitSpawn2' not in s:
-    s=s.replace(inc,inc+decl,1)
+    s=s.replace('#include <sysmodule/sysmodule.h>\n','#include <sysmodule/sysmodule.h>\n'+decl,1)
 
 start=s.find('static int v26_launch_xmb_game(const Movie &movie)')
 if start < 0:
@@ -29,13 +31,15 @@ new=r'''static int v27_launch_xmb_game(const Movie &movie)
     std::string eboot=movie.path+"/USRDIR/EBOOT.BIN";
     struct stat st; if(stat(eboot.c_str(),&st)!=0) return -361;
 
-    /* Guardar evidencia antes de abandonar FLOWPS3. */
     FILE *lf=fopen("/dev_hdd0/FLOWPS3_XMB_LAUNCH.txt","w");
     if(lf){ fprintf(lf,"V27 BEFORE_NPDRM\nPATH=%s\n",eboot.c_str()); fclose(lf); }
 
-    /* SYSUTIL_NP = 0x0016. Si ya está cargado, el firmware puede devolver
-       ALREADY_LOADED; no es un error fatal para el lanzamiento. */
-    sysModuleLoad(0x0016);
+    /* Cargar el módulo NP del firmware. DUPLICATE significa que ya estaba
+       cargado y también es válido para continuar. */
+    s32 npmod=sysModuleLoad(SYSMODULE_SYSUTIL_NP);
+    lf=fopen("/dev_hdd0/FLOWPS3_XMB_LAUNCH.txt","a");
+    if(lf){ fprintf(lf,"NP_MODULE=0x%08X\n",(unsigned int)npmod); fclose(lf); }
+    if(npmod!=SYSMODULE_OK && (u32)npmod!=SYSMODULE_ERR_DUPLICATE) return npmod;
 
     static unsigned char spawn_data[256] __attribute__((aligned(16)));
     for(unsigned int i=0;i<sizeof(spawn_data);i++) spawn_data[i]=(unsigned char)i;
@@ -50,9 +54,6 @@ new=r'''static int v27_launch_xmb_game(const Movie &movie)
                                       sizeof(spawn_data), 1000,
                                       SYS_PROCESS_SPAWN_STACK_SIZE_1M);
 
-    /* En éxito esta función sustituye el proceso y no debería volver.
-       Si vuelve, registramos el error y probamos el launcher genérico solo
-       como fallback para homebrew/no-NPDRM. */
     lf=fopen("/dev_hdd0/FLOWPS3_XMB_LAUNCH.txt","a");
     if(lf){ fprintf(lf,"NPDRM_RET=0x%08X\n",ret); fclose(lf); }
 
@@ -69,7 +70,6 @@ s=s[:start]+new+s[end:]
 s=s.replace('v26_launch_xmb_game(movie)','v27_launch_xmb_game(movie)',1)
 s=s.replace('"V26"','"V27"')
 
-# Añadir el stub de importación NP del firmware.
 mp=Path('Makefile')
 m=mp.read_text()
 needle='$(TOPDIR)/third_party/lib/libcobra.a \\\n'
