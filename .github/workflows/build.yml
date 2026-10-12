@@ -1,4 +1,4 @@
-name: Compilar FLOWPS3 V27
+name: Compilar FLOWPS3 V28
 
 on:
   push:
@@ -17,7 +17,7 @@ jobs:
       - name: Instalar dependencias del host
         run: |
           sudo apt-get update
-          sudo apt-get install -y curl jq ca-certificates libelf1 zlib1g libgmp10 libstdc++6 python3-pil fonts-dejavu-core xz-utils
+          sudo apt-get install -y curl jq ca-certificates libelf1 zlib1g libgmp10 libstdc++6 python3-pil fonts-dejavu-core
 
       - name: Descargar PS3DEV precompilado actual
         run: |
@@ -35,7 +35,7 @@ jobs:
           echo "$GITHUB_WORKSPACE/ps3dev/ppu/bin" >> "$GITHUB_PATH"
           echo "$GITHUB_WORKSPACE/ps3dev/spu/bin" >> "$GITHUB_PATH"
 
-      - name: Preparar bibliotecas NTFS Cobra UDF imagenes y NPDRM
+      - name: Preparar bibliotecas NTFS Cobra UDF e imagenes
         run: |
           mkdir -p third_party/include third_party/lib pkgfiles/USRDIR
           curl -fL https://raw.githubusercontent.com/aldostools/IRISMAN/master/include/ntfs.h -o third_party/include/ntfs.h
@@ -50,26 +50,6 @@ jobs:
           curl -fL https://raw.githubusercontent.com/ace20022/libudfread/master/src/udfread.c -o source/udfread.c
           curl -fL https://raw.githubusercontent.com/ace20022/libudfread/master/src/ecma167.c -o source/ecma167.c
           curl -fL https://raw.githubusercontent.com/nothings/stb/master/stb_image.h -o third_party/include/stb_image.h
-
-          # Generar un stub de importación para sceNpDrmProcessExitSpawn2
-          # usando la base pública de NIDs de PS3DK. La implementación real
-          # sigue estando en el firmware de la PS3.
-          curl -fL https://github.com/FirebirdTA01/PS3DK/releases/download/v0.22.4/ps3-sdk-tools-v0.22.4-linux-x86_64.tar.xz -o /tmp/ps3dk-tools.tar.xz
-          mkdir -p /tmp/ps3dk-tools /tmp/npstub
-          tar -xJf /tmp/ps3dk-tools.tar.xz -C /tmp/ps3dk-tools
-          NIDGEN=$(find /tmp/ps3dk-tools -type f -name nidgen | head -n1)
-          test -n "$NIDGEN"
-          chmod +x "$NIDGEN"
-          curl -fL https://raw.githubusercontent.com/FirebirdTA01/PS3DK/main/tools/nidgen/nids/extracted/libsysutil_np_stub.yaml -o /tmp/libsysutil_np_stub.yaml
-          "$NIDGEN" archive \
-            --input /tmp/libsysutil_np_stub.yaml \
-            --toolchain-bin "$PS3DEV/ppu/bin" \
-            --out-dir /tmp/npstub \
-            --abi ilp32
-          NPSTUB=$(find /tmp/npstub -name libsysutil_np_stub.a | head -n1)
-          test -n "$NPSTUB"
-          cp "$NPSTUB" third_party/lib/libsysutil_np_stub.a
-          test -s third_party/lib/libsysutil_np_stub.a
 
       - name: Aplicar base V12
         run: python3 scripts/v12_patch.py
@@ -103,13 +83,15 @@ jobs:
         run: python3 scripts/v26_patch.py
       - name: Aplicar FLOWPS3 V27
         run: python3 scripts/v27_patch.py
+      - name: Aplicar FLOWPS3 V28
+        run: python3 scripts/v28_patch.py
 
       - name: Preparar raw_iso.sprx
         run: |
           curl -fL https://raw.githubusercontent.com/aldostools/IRISMAN/master/rawseciso/bin2c/rawseciso.c -o /tmp/rawseciso.c
           python3 -c "import re,pathlib; s=pathlib.Path('/tmp/rawseciso.c').read_text(); m=re.search(r'raw_iso_sprx\\[[^\\]]+\\]\\s*=\\s*\\{(.*?)\\};',s,re.S); assert m; pathlib.Path('pkgfiles/USRDIR/raw_iso.sprx').write_bytes(bytes(int(x,16) for x in re.findall(r'0x([0-9A-Fa-f]{2})',m.group(1))))"
 
-      - name: Crear arte FLOWPS3 V27
+      - name: Crear arte FLOWPS3 V28
         run: python3 scripts/v17_art.py
 
       - name: Compilar PKG
@@ -119,10 +101,10 @@ jobs:
           make pkg
           ls -lh *.pkg pkgfiles/ICON0.PNG pkgfiles/PIC0.PNG pkgfiles/PIC1.PNG pkgfiles/USRDIR/APPBG.JPG
 
-      - name: Guardar PKG FLOWPS3 V27
+      - name: Guardar PKG FLOWPS3 V28
         uses: actions/upload-artifact@v4
         with:
-          name: FLOWPS3-V27-PKG
+          name: FLOWPS3-V28-PKG
           path: |
             flowps3.pkg
             flowps3.gnpdrm.pkg
