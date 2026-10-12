@@ -7,7 +7,7 @@ s=p.read_text()
 # Quita el import NPDRM estático de V27 porque puede impedir que FLOWPS3
 # llegue a main() en ciertos CFW/firmwares. Recupera un arranque limpio.
 # Para juegos instalados usa el launcher genérico exacto y, si retorna,
-# NO cierra FLOWPS3: registra el código real para diagnosticar el fallo.
+# NO cierra FLOWPS3: registra que el firmware devolvió el control.
 
 # Eliminar declaración NPDRM añadida por V27.
 s=s.replace('\nextern "C" int sceNpDrmProcessExitSpawn2(const void *k_licensee, const char *path, const char *argv[], const char *envp[], unsigned int data, size_t data_size, int prio, unsigned long long flags);\n','\n')
@@ -35,18 +35,15 @@ new=r'''static int v28_launch_xmb_game(const Movie &movie)
     /* Secuencia equivalente al launcher SELF usado por frontends PS3:
        NULL argv/env/data, prioridad 3071 y stack de 1 MiB. No tocamos
        NPDRM/licencias. Si el spawn funciona, esta llamada no vuelve. */
-    int ret=sysProcessExitSpawn2(eboot.c_str(),NULL,NULL,NULL,0,3071,
-                                 SYS_PROCESS_SPAWN_STACK_SIZE_1M);
+    sysProcessExitSpawn2(eboot.c_str(),NULL,NULL,NULL,0,3071,
+                         SYS_PROCESS_SPAWN_STACK_SIZE_1M);
 
-    /* Si vuelve, el firmware rechazó el lanzamiento. No salir al XMB:
-       conservar FLOWPS3 abierto y registrar el código exacto. */
+    /* Si vuelve, el lanzamiento no tomó el control. No cerramos FLOWPS3. */
     lf=fopen("/dev_hdd0/FLOWPS3_XMB_LAUNCH.txt","a");
-    if(lf){ fprintf(lf,"EXITSPAWN_RET=0x%08X (%d)\n",ret,ret); fclose(lf); }
+    if(lf){ fprintf(lf,"EXITSPAWN_RETURNED\n"); fclose(lf); }
 
-    char msg[192];
-    snprintf(msg,sizeof(msg),"No se pudo iniciar el juego. Codigo: 0x%08X",ret);
-    show_status(msg);
-    return ret;
+    show_status("El firmware devolvio el control a FLOWPS3; el juego no inicio.");
+    return -362;
 }
 '''
 
