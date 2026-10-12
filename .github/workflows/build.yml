@@ -17,7 +17,7 @@ jobs:
       - name: Instalar dependencias del host
         run: |
           sudo apt-get update
-          sudo apt-get install -y curl jq ca-certificates libelf1 zlib1g libgmp10 libstdc++6 python3-pil python3-pip python3-tk fonts-dejavu-core
+          sudo apt-get install -y curl jq unzip ca-certificates libelf1 zlib1g libgmp10 libstdc++6 python3-pil fonts-dejavu-core
 
       - name: Descargar PS3DEV precompilado actual
         run: |
@@ -90,19 +90,10 @@ jobs:
 
       - name: Integrar SNES9x 2010 para PS3
         run: |
-          python3 -m pip install --break-system-packages pycryptodomex customtkinter
-          curl -fL https://raw.githubusercontent.com/AphelionWasTaken/PyKG/main/PyKG.py -o /tmp/PyKG.py
-          curl -fL https://github.com/crystalct/RetroArch_PSX_CE/releases/download/v0.4-beta/RetroArch_Psx-Place_Community_Edition_beta04-20220207.pkg -o /tmp/retroarch-ce.pkg
-          mkdir -p /tmp/retroarch-extract pkgfiles/USRDIR/cores pkgfiles/USRDIR/licenses
-          python3 - <<'PY'
-          import importlib.util
-          from pathlib import Path
-          spec=importlib.util.spec_from_file_location("pykg","/tmp/PyKG.py")
-          mod=importlib.util.module_from_spec(spec)
-          spec.loader.exec_module(mod)
-          mod.extract_pkg(Path("/tmp/retroarch-ce.pkg"),Path("/tmp/retroarch-extract"))
-          PY
-          CORE=$(find /tmp/retroarch-extract -type f -iname 'snes9x2010_libretro_ps3.SELF' -print -quit)
+          mkdir -p /tmp/snescore pkgfiles/USRDIR/cores pkgfiles/USRDIR/licenses
+          curl -fL https://raw.githubusercontent.com/crystalct/crystalct.github.io/main/snes9x2010_libretro_ps3.SELF.zip -o /tmp/snes9x2010.zip
+          unzip -o /tmp/snes9x2010.zip -d /tmp/snescore
+          CORE=$(find /tmp/snescore -type f -iname 'snes9x2010_libretro_ps3.SELF' -print -quit)
           test -n "$CORE"
           cp "$CORE" pkgfiles/USRDIR/cores/snes9x2010_libretro_ps3.SELF
           curl -fL https://raw.githubusercontent.com/libretro/snes9x2010/master/LICENSE.txt -o pkgfiles/USRDIR/licenses/SNES9X2010-LICENSE.txt
