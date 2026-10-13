@@ -99,8 +99,8 @@ jobs:
           ppu-gcc --version
           make clean
           make
-          test -f 3disoplayer.self
-          cp 3disoplayer.self pkgfiles/USRDIR/FLOWPS3.SELF
+          test -f flowps3.self
+          cp flowps3.self pkgfiles/USRDIR/FLOWPS3.SELF
           make pkg
           ls -lh *.pkg pkgfiles/USRDIR/FLOWPS3.SELF pkgfiles/USRDIR/cores/snes9x2010_libretro_ps3.SELF
 
@@ -111,6 +111,4 @@ jobs:
           path: |
             flowps3.pkg
             flowps3.gnpdrm.pkg
-            3disoplayer.pkg
-            3disoplayer.gnpdrm.pkg
           if-no-files-found: error
