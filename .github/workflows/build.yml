@@ -1,4 +1,4 @@
-name: Compilar FLOWPS3 V31
+name: Compilar FLOWPS3 V32
 
 on:
   push:
@@ -51,46 +51,29 @@ jobs:
           curl -fL https://raw.githubusercontent.com/ace20022/libudfread/master/src/ecma167.c -o source/ecma167.c
           curl -fL https://raw.githubusercontent.com/nothings/stb/master/stb_image.h -o third_party/include/stb_image.h
 
-      - name: Aplicar base V12
-        run: python3 scripts/v12_patch.py
-      - name: Aplicar base XMB V13
-        run: python3 scripts/v13_patch.py
-      - name: Aplicar FLOWPS3 V14
-        run: python3 scripts/v14_patch.py
-      - name: Aplicar FLOWPS3 V15
-        run: python3 scripts/v15_patch.py
-      - name: Aplicar FLOWPS3 V16
-        run: python3 scripts/v16_patch.py
-      - name: Aplicar FLOWPS3 V17
-        run: python3 scripts/v17_patch.py
-      - name: Aplicar FLOWPS3 V18
-        run: python3 scripts/v18_patch.py
-      - name: Aplicar FLOWPS3 V19
-        run: python3 scripts/v19_patch.py
-      - name: Aplicar FLOWPS3 V20
-        run: python3 scripts/v20_patch.py
-      - name: Aplicar FLOWPS3 V21
-        run: python3 scripts/v21_patch.py
-      - name: Aplicar FLOWPS3 V22
-        run: python3 scripts/v22_patch.py
-      - name: Aplicar FLOWPS3 V23
-        run: python3 scripts/v23_patch.py
-      - name: Aplicar FLOWPS3 V24
-        run: python3 scripts/v24_patch.py
-      - name: Aplicar FLOWPS3 V25
-        run: python3 scripts/v25_patch.py
-      - name: Aplicar FLOWPS3 V26
-        run: python3 scripts/v26_patch.py
-      - name: Aplicar FLOWPS3 V27
-        run: python3 scripts/v27_patch.py
-      - name: Aplicar FLOWPS3 V28
-        run: python3 scripts/v28_patch.py
-      - name: Aplicar FLOWPS3 V29
-        run: python3 scripts/v29_patch.py
-      - name: Aplicar FLOWPS3 V30
-        run: python3 scripts/v30_patch.py
-      - name: Aplicar FLOWPS3 V31
-        run: python3 scripts/v31_patch.py
+      - name: Aplicar parches FLOWPS3
+        run: |
+          python3 scripts/v12_patch.py
+          python3 scripts/v13_patch.py
+          python3 scripts/v14_patch.py
+          python3 scripts/v15_patch.py
+          python3 scripts/v16_patch.py
+          python3 scripts/v17_patch.py
+          python3 scripts/v18_patch.py
+          python3 scripts/v19_patch.py
+          python3 scripts/v20_patch.py
+          python3 scripts/v21_patch.py
+          python3 scripts/v22_patch.py
+          python3 scripts/v23_patch.py
+          python3 scripts/v24_patch.py
+          python3 scripts/v25_patch.py
+          python3 scripts/v26_patch.py
+          python3 scripts/v27_patch.py
+          python3 scripts/v28_patch.py
+          python3 scripts/v29_patch.py
+          python3 scripts/v30_patch.py
+          python3 scripts/v31_patch.py
+          python3 scripts/v32_patch.py
 
       - name: Compilar SNES9x 2010 personalizado para FLOWPS3
         run: |
@@ -99,7 +82,7 @@ jobs:
           make -C /tmp/flow-snes -f Makefile.libretro platform=psl1ght -j2
           test -f /tmp/flow-snes/snes9x2010_libretro_psl1ght.a
 
-          git clone --depth 1 https://github.com/libretro/RetroArch.git /tmp/flow-ra
+          git clone --depth 1 --branch v1.19.1 https://github.com/libretro/RetroArch.git /tmp/flow-ra
           python3 - <<'PY'
           from pathlib import Path
           p=Path('/tmp/flow-ra/frontend/drivers/platform_ps3.c')
@@ -116,7 +99,6 @@ jobs:
           p.write_text(s)
           PY
 
-          make -C /tmp/flow-ra -f Makefile.psl1ght clean
           cp /tmp/flow-snes/snes9x2010_libretro_psl1ght.a /tmp/flow-ra/libretro_psl1ght.a
           make -C /tmp/flow-ra -f Makefile.psl1ght -j2
           test -f /tmp/flow-ra/retroarch_psl1ght.self
@@ -130,7 +112,7 @@ jobs:
           curl -fL https://raw.githubusercontent.com/aldostools/IRISMAN/master/rawseciso/bin2c/rawseciso.c -o /tmp/rawseciso.c
           python3 -c "import re,pathlib; s=pathlib.Path('/tmp/rawseciso.c').read_text(); m=re.search(r'raw_iso_sprx\\[[^\\]]+\\]\\s*=\\s*\\{(.*?)\\};',s,re.S); assert m; pathlib.Path('pkgfiles/USRDIR/raw_iso.sprx').write_bytes(bytes(int(x,16) for x in re.findall(r'0x([0-9A-Fa-f]{2})',m.group(1))))"
 
-      - name: Crear arte FLOWPS3 V31
+      - name: Crear arte FLOWPS3 V32
         run: python3 scripts/v17_art.py
 
       - name: Compilar PKG
@@ -143,11 +125,13 @@ jobs:
           make pkg
           ls -lh *.pkg pkgfiles/USRDIR/FLOWPS3.SELF pkgfiles/USRDIR/cores/snes9x2010_libretro_ps3.SELF
 
-      - name: Guardar PKG FLOWPS3 V31
+      - name: Guardar PKG FLOWPS3 V32
         uses: actions/upload-artifact@v4
         with:
-          name: FLOWPS3-V31-PKG
+          name: FLOWPS3-V32-PKG
           path: |
+            flowps3.pkg
+            flowps3.gnpdrm.pkg
             3disoplayer.pkg
             3disoplayer.gnpdrm.pkg
           if-no-files-found: error
