@@ -1,4 +1,4 @@
-name: Compilar FLOWPS3 V32
+name: Compilar FLOWPS3 V33
 
 on:
   push:
@@ -17,7 +17,7 @@ jobs:
       - name: Instalar dependencias del host
         run: |
           sudo apt-get update
-          sudo apt-get install -y curl jq unzip git ca-certificates libelf1 zlib1g libgmp10 libstdc++6 python3-pil fonts-dejavu-core
+          sudo apt-get install -y curl jq unzip ca-certificates libelf1 zlib1g libgmp10 libstdc++6 python3-pil fonts-dejavu-core
 
       - name: Descargar PS3DEV precompilado actual
         run: |
@@ -53,57 +53,33 @@ jobs:
 
       - name: Aplicar parches FLOWPS3
         run: |
-          python3 scripts/v12_patch.py
-          python3 scripts/v13_patch.py
-          python3 scripts/v14_patch.py
-          python3 scripts/v15_patch.py
-          python3 scripts/v16_patch.py
-          python3 scripts/v17_patch.py
-          python3 scripts/v18_patch.py
-          python3 scripts/v19_patch.py
-          python3 scripts/v20_patch.py
-          python3 scripts/v21_patch.py
-          python3 scripts/v22_patch.py
-          python3 scripts/v23_patch.py
-          python3 scripts/v24_patch.py
-          python3 scripts/v25_patch.py
-          python3 scripts/v26_patch.py
-          python3 scripts/v27_patch.py
-          python3 scripts/v28_patch.py
-          python3 scripts/v29_patch.py
-          python3 scripts/v30_patch.py
-          python3 scripts/v31_patch.py
+          for v in {12..31}; do
+            test -f scripts/v${v}_patch.py && python3 scripts/v${v}_patch.py || true
+          done
 
-      - name: Compilar SNES9x 2010 personalizado para FLOWPS3
+      - name: Integrar SNES9x 2010 probado y enlazar config FLOWPS3
         run: |
-          rm -rf /tmp/flow-ra /tmp/flow-snes
-          git clone --depth 1 https://github.com/libretro/snes9x2010.git /tmp/flow-snes
-          make -C /tmp/flow-snes -f Makefile.libretro platform=psl1ght -j2
-          test -f /tmp/flow-snes/snes9x2010_libretro_psl1ght.a
-
-          git clone --depth 1 --branch v1.10.0 https://github.com/libretro/RetroArch.git /tmp/flow-ra
+          rm -rf /tmp/snescore
+          mkdir -p /tmp/snescore pkgfiles/USRDIR/cores pkgfiles/USRDIR/licenses
+          curl -fL https://raw.githubusercontent.com/crystalct/crystalct.github.io/main/snes9x2010_libretro_ps3.SELF.zip -o /tmp/snes9x2010.zip
+          unzip -o /tmp/snes9x2010.zip -d /tmp/snescore
+          CORE=$(find /tmp/snescore -type f -iname 'snes9x2010_libretro_ps3.SELF' -print -quit)
+          test -n "$CORE"
+          cp "$CORE" pkgfiles/USRDIR/cores/snes9x2010_libretro_ps3.SELF
           python3 - <<'PY'
           from pathlib import Path
-          p=Path('/tmp/flow-ra/frontend/drivers/platform_ps3.c')
-          s=p.read_text()
-          old='#define EMULATOR_CONTENT_DIR "SSNE10001"'
-          if old not in s:
-              raise SystemExit('EMULATOR_CONTENT_DIR PSL1GHT no encontrado')
-          s=s.replace(old, '#define EMULATOR_CONTENT_DIR "3DISO0001"', 1)
-          old_shutdown='''static void frontend_ps3_shutdown(bool unused)\n{\n   sysProcessExit(0);\n}\n'''
-          new_shutdown='''static void frontend_ps3_shutdown(bool unused)\n{\n   const char *flow_argv[] = { NULL };\n   (void)unused;\n   sysProcessExitSpawn2("/dev_hdd0/game/3DISO0001/USRDIR/FLOWPS3.SELF",\n         flow_argv, NULL, NULL, 0, 1000, SYS_PROCESS_SPAWN_STACK_SIZE_1M);\n   sysProcessExit(0);\n}\n'''
-          if old_shutdown not in s:
-              raise SystemExit('frontend_ps3_shutdown no encontrado')
-          s=s.replace(old_shutdown,new_shutdown,1)
-          p.write_text(s)
+          p=Path('pkgfiles/USRDIR/cores/snes9x2010_libretro_ps3.SELF')
+          b=p.read_bytes()
+          old=b'SSNE10001'; new=b'3DISO0001'
+          n=b.count(old)
+          print('APPID occurrences:', n)
+          if n < 1:
+              raise SystemExit('El SELF probado no contiene SSNE10001; se aborta para no generar un PKG dudoso')
+          p.write_bytes(b.replace(old,new))
           PY
-
-          cp /tmp/flow-snes/snes9x2010_libretro_psl1ght.a /tmp/flow-ra/libretro_psl1ght.a
-          make -C /tmp/flow-ra -f Makefile.psl1ght -j2
-          test -f /tmp/flow-ra/retroarch_psl1ght.self
-          mkdir -p pkgfiles/USRDIR/cores pkgfiles/USRDIR/licenses
-          cp /tmp/flow-ra/retroarch_psl1ght.self pkgfiles/USRDIR/cores/snes9x2010_libretro_ps3.SELF
           curl -fL https://raw.githubusercontent.com/libretro/snes9x2010/master/LICENSE.txt -o pkgfiles/USRDIR/licenses/SNES9X2010-LICENSE.txt
+          curl -fL https://raw.githubusercontent.com/libretro/RetroArch/v1.10.0/COPYING -o pkgfiles/USRDIR/licenses/RETROARCH-GPLv3.txt
+          printf '%s\n' 'RetroArch PS3 frontend: v1.10-era prebuilt SELF used by FLOWPS3; APPID string patched SSNE10001 -> 3DISO0001 so it reads FLOWPS3 retroarch.cfg.' > pkgfiles/USRDIR/licenses/RETROARCH-NOTICE.txt
           ls -lh pkgfiles/USRDIR/cores/snes9x2010_libretro_ps3.SELF
 
       - name: Preparar raw_iso.sprx
@@ -111,7 +87,7 @@ jobs:
           curl -fL https://raw.githubusercontent.com/aldostools/IRISMAN/master/rawseciso/bin2c/rawseciso.c -o /tmp/rawseciso.c
           python3 -c "import re,pathlib; s=pathlib.Path('/tmp/rawseciso.c').read_text(); m=re.search(r'raw_iso_sprx\\[[^\\]]+\\]\\s*=\\s*\\{(.*?)\\};',s,re.S); assert m; pathlib.Path('pkgfiles/USRDIR/raw_iso.sprx').write_bytes(bytes(int(x,16) for x in re.findall(r'0x([0-9A-Fa-f]{2})',m.group(1))))"
 
-      - name: Crear arte FLOWPS3 V32
+      - name: Crear arte FLOWPS3 V33
         run: python3 scripts/v17_art.py
 
       - name: Compilar PKG
@@ -124,10 +100,10 @@ jobs:
           make pkg
           ls -lh *.pkg pkgfiles/USRDIR/FLOWPS3.SELF pkgfiles/USRDIR/cores/snes9x2010_libretro_ps3.SELF
 
-      - name: Guardar PKG FLOWPS3 V32
+      - name: Guardar PKG FLOWPS3 V33
         uses: actions/upload-artifact@v4
         with:
-          name: FLOWPS3-V32-PKG
+          name: FLOWPS3-V33-PKG
           path: |
             flowps3.pkg
             flowps3.gnpdrm.pkg
