@@ -81,7 +81,7 @@ jobs:
           make -C /tmp/flow-snes -f Makefile.libretro platform=psl1ght -j2
           test -f /tmp/flow-snes/snes9x2010_libretro_psl1ght.a
 
-          git clone --depth 1 --branch v1.19.1 https://github.com/libretro/RetroArch.git /tmp/flow-ra
+          git clone --depth 1 --branch v1.10.0 https://github.com/libretro/RetroArch.git /tmp/flow-ra
           python3 - <<'PY'
           from pathlib import Path
           p=Path('/tmp/flow-ra/frontend/drivers/platform_ps3.c')
