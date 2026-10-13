@@ -1,4 +1,4 @@
-name: Compilar FLOWPS3 V29
+name: Compilar FLOWPS3 V30
 
 on:
   push:
@@ -87,6 +87,8 @@ jobs:
         run: python3 scripts/v28_patch.py
       - name: Aplicar FLOWPS3 V29
         run: python3 scripts/v29_patch.py
+      - name: Aplicar FLOWPS3 V30
+        run: python3 scripts/v30_patch.py
 
       - name: Integrar SNES9x 2010 para PS3
         run: |
@@ -104,7 +106,7 @@ jobs:
           curl -fL https://raw.githubusercontent.com/aldostools/IRISMAN/master/rawseciso/bin2c/rawseciso.c -o /tmp/rawseciso.c
           python3 -c "import re,pathlib; s=pathlib.Path('/tmp/rawseciso.c').read_text(); m=re.search(r'raw_iso_sprx\\[[^\\]]+\\]\\s*=\\s*\\{(.*?)\\};',s,re.S); assert m; pathlib.Path('pkgfiles/USRDIR/raw_iso.sprx').write_bytes(bytes(int(x,16) for x in re.findall(r'0x([0-9A-Fa-f]{2})',m.group(1))))"
 
-      - name: Crear arte FLOWPS3 V29
+      - name: Crear arte FLOWPS3 V30
         run: python3 scripts/v17_art.py
 
       - name: Compilar PKG
@@ -114,10 +116,10 @@ jobs:
           make pkg
           ls -lh *.pkg pkgfiles/ICON0.PNG pkgfiles/PIC0.PNG pkgfiles/PIC1.PNG pkgfiles/USRDIR/APPBG.JPG pkgfiles/USRDIR/cores/snes9x2010_libretro_ps3.SELF
 
-      - name: Guardar PKG FLOWPS3 V29
+      - name: Guardar PKG FLOWPS3 V30
         uses: actions/upload-artifact@v4
         with:
-          name: FLOWPS3-V29-PKG
+          name: FLOWPS3-V30-PKG
           path: |
             flowps3.pkg
             flowps3.gnpdrm.pkg
