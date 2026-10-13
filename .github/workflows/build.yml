@@ -53,11 +53,28 @@ jobs:
 
       - name: Aplicar parches FLOWPS3
         run: |
-          for v in {12..31}; do
-            test -f scripts/v${v}_patch.py && python3 scripts/v${v}_patch.py || true
-          done
+          python3 scripts/v12_patch.py
+          python3 scripts/v13_patch.py
+          python3 scripts/v14_patch.py
+          python3 scripts/v15_patch.py
+          python3 scripts/v16_patch.py
+          python3 scripts/v17_patch.py
+          python3 scripts/v18_patch.py
+          python3 scripts/v19_patch.py
+          python3 scripts/v20_patch.py
+          python3 scripts/v21_patch.py
+          python3 scripts/v22_patch.py
+          python3 scripts/v23_patch.py
+          python3 scripts/v24_patch.py
+          python3 scripts/v25_patch.py
+          python3 scripts/v26_patch.py
+          python3 scripts/v27_patch.py
+          python3 scripts/v28_patch.py
+          python3 scripts/v29_patch.py
+          python3 scripts/v30_patch.py
+          python3 scripts/v31_patch.py
 
-      - name: Integrar SNES9x 2010 probado y enlazar config FLOWPS3
+      - name: Integrar SNES9x 2010 probado
         run: |
           rm -rf /tmp/snescore
           mkdir -p /tmp/snescore pkgfiles/USRDIR/cores pkgfiles/USRDIR/licenses
@@ -66,20 +83,7 @@ jobs:
           CORE=$(find /tmp/snescore -type f -iname 'snes9x2010_libretro_ps3.SELF' -print -quit)
           test -n "$CORE"
           cp "$CORE" pkgfiles/USRDIR/cores/snes9x2010_libretro_ps3.SELF
-          python3 - <<'PY'
-          from pathlib import Path
-          p=Path('pkgfiles/USRDIR/cores/snes9x2010_libretro_ps3.SELF')
-          b=p.read_bytes()
-          old=b'SSNE10001'; new=b'3DISO0001'
-          n=b.count(old)
-          print('APPID occurrences:', n)
-          if n < 1:
-              raise SystemExit('El SELF probado no contiene SSNE10001; se aborta para no generar un PKG dudoso')
-          p.write_bytes(b.replace(old,new))
-          PY
           curl -fL https://raw.githubusercontent.com/libretro/snes9x2010/master/LICENSE.txt -o pkgfiles/USRDIR/licenses/SNES9X2010-LICENSE.txt
-          curl -fL https://raw.githubusercontent.com/libretro/RetroArch/v1.10.0/COPYING -o pkgfiles/USRDIR/licenses/RETROARCH-GPLv3.txt
-          printf '%s\n' 'RetroArch PS3 frontend: v1.10-era prebuilt SELF used by FLOWPS3; APPID string patched SSNE10001 -> 3DISO0001 so it reads FLOWPS3 retroarch.cfg.' > pkgfiles/USRDIR/licenses/RETROARCH-NOTICE.txt
           ls -lh pkgfiles/USRDIR/cores/snes9x2010_libretro_ps3.SELF
 
       - name: Preparar raw_iso.sprx
