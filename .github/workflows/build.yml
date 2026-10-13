@@ -73,7 +73,6 @@ jobs:
           python3 scripts/v29_patch.py
           python3 scripts/v30_patch.py
           python3 scripts/v31_patch.py
-          python3 scripts/v32_patch.py
 
       - name: Compilar SNES9x 2010 personalizado para FLOWPS3
         run: |
