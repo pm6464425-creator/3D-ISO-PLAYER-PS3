@@ -42,7 +42,6 @@ jobs:
           curl -fL https://raw.githubusercontent.com/aldostools/IRISMAN/master/include/cobra.h -o third_party/include/cobra.h
           curl -fL https://raw.githubusercontent.com/aldostools/IRISMAN/master/lib/libcobra.a -o third_party/lib/libcobra.a
           curl -fL https://raw.githubusercontent.com/aldostools/IRISMAN/master/lib/libfatfs.a -o third_party/lib/libfatfs.a
-          curl -fL https://raw.githubusercontent.com/aldostools/IRISMAN/master/libntfs/lib/libntfs.a -o third_party/lib/libntfs.a || true
           curl -fL https://raw.githubusercontent.com/aldostools/IRISMAN/master/lib/libntfs_ext.a -o third_party/lib/libntfs_ext.a
           curl -fL https://raw.githubusercontent.com/ace20022/libudfread/master/src/udfread.h -o third_party/include/udfread.h
           curl -fL https://raw.githubusercontent.com/ace20022/libudfread/master/src/blockinput.h -o third_party/include/blockinput.h
@@ -60,6 +59,7 @@ jobs:
           python3 scripts/flow_movie_3d_fix_v2.py
           python3 scripts/flow_movie_3d_spooky_v3.py
           python3 scripts/flow_movie_3d_v46_software_safe.py
+          python3 scripts/v46_linkfix.py
           cp source/main.cpp generated_main_v46.cpp
 
       - name: Diez rondas de verificacion software-safe
