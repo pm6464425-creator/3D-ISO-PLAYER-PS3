@@ -2,7 +2,7 @@ name: Compilar FLOW MOVIE V2.9
 
 on:
   push:
-    branches: [ movie-v2-9 ]
+    branches: [ movie-v2-8 ]
   workflow_dispatch:
 
 jobs:
