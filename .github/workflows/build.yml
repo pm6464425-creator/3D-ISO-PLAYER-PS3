@@ -1,4 +1,4 @@
-name: Compilar FLOW MOVIE 3D V2
+name: Compilar FLOW MOVIE 3D V3
 
 on:
   push:
@@ -69,12 +69,13 @@ jobs:
           test "$MAMBA_COUNT" -gt 0
           test "$LOADER_COUNT" -gt 0
 
-      - name: Aplicar FLOW MOVIE 3D V2
+      - name: Aplicar FLOW MOVIE 3D V3
         run: |
           python3 scripts/movie_only_patch.py
           python3 scripts/env_patch.py
           python3 scripts/flow_movie_3d_patch.py
           python3 scripts/flow_movie_3d_fix_v2.py
+          python3 scripts/flow_movie_3d_spooky_v3.py
 
       - name: Preparar raw_iso.sprx
         run: |
@@ -93,10 +94,10 @@ jobs:
           ls -lh *.pkg pkgfiles/USRDIR/raw_iso.sprx
           du -sh pkgfiles/USRDIR/mamba
 
-      - name: Guardar PKG FLOW MOVIE 3D V2
+      - name: Guardar PKG FLOW MOVIE 3D V3
         uses: actions/upload-artifact@v4
         with:
-          name: FLOW-MOVIE-3D-V2-PKG
+          name: FLOW-MOVIE-3D-V3-PKG
           path: |
             3disoplayer.pkg
             3disoplayer.gnpdrm.pkg
