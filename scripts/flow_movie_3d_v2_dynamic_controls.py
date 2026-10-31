@@ -10,7 +10,7 @@ def replace_once(old: str, new: str, label: str):
         raise SystemExit(f'{label} anchor not found')
     s = s.replace(old, new, 1)
 
-# FLOW V2 DYNAMIC keeps the proven software framebuffer/NTFS backend.
+# FLOW V2 DYNAMIC 60FPS keeps the proven software framebuffer/NTFS backend.
 # Only input mapping, animation timing and on-screen shoulder labels are changed.
 
 # Correct shoulder mapping: previous tab = L1, next tab = R1.
@@ -41,20 +41,32 @@ s = s.replace('text_width("R2",1,4)', 'text_width("L1",1,4)')
 s = s.replace('"R2",1,0xFFC7CED4,4', '"L1",1,0xFFC7CED4,4')
 s = s.replace('R1/R2  CAMBIAR', 'L1/R1  CAMBIAR')
 
-# V2 optimized software renderer was intentionally capped near 33 fps.
-# For the new interpolated motion, target ~50 fps while keeping the same renderer.
+# The RSX backend already uses GCM_FLIP_VSYNC and flip() waits for the display flip.
+# An additional 16-20 ms usleep after every rendered frame effectively throttles the UI.
+# Remove that extra sleep so coverflow can present on every VSync (60 Hz on a 60 Hz display).
 if '        usleep(30000);\n' in s:
-    s = s.replace('        usleep(30000);\n', '        usleep(20000);\n', 1)
+    s = s.replace('        usleep(30000);\n', '', 1)
+elif '        usleep(20000);\n' in s:
+    s = s.replace('        usleep(20000);\n', '', 1)
 elif '        usleep(16000);\n' in s:
-    s = s.replace('        usleep(16000);\n', '        usleep(20000);\n', 1)
+    s = s.replace('        usleep(16000);\n', '', 1)
 else:
     raise SystemExit('frame pacing anchor not found')
 
-# Match spring integration to the actual target frame interval.
-replace_once('const float dt=1.0f/60.0f;', 'const float dt=1.0f/50.0f;', 'flow dt')
+# One spring integration step per VSync/frame at 60 Hz.
+# Keeping the physics at 60 Hz prevents the interpolation from looking stepped.
+if 'const float dt=1.0f/50.0f;' in s:
+    s = s.replace('const float dt=1.0f/50.0f;', 'const float dt=1.0f/60.0f;', 1)
+elif 'const float dt=1.0f/60.0f;' not in s:
+    raise SystemExit('flow dt anchor not found')
 
-# Slightly quicker critical damping: responsive but no hard jumps.
-replace_once('const float w=18.0f;', 'const float w=20.0f;', 'flow spring')
+# Responsive critically damped movement without hard jumps.
+if 'const float w=20.0f;' in s:
+    s = s.replace('const float w=20.0f;', 'const float w=21.0f;', 1)
+elif 'const float w=18.0f;' in s:
+    s = s.replace('const float w=18.0f;', 'const float w=21.0f;', 1)
+else:
+    raise SystemExit('flow spring anchor not found')
 
 p.write_text(s)
-print('FLOW MOVIE 3D V2 DYNAMIC: smooth coverflow + L1/R1 edge-trigger controls applied')
+print('FLOW MOVIE 3D V2 DYNAMIC 60FPS: VSync-paced coverflow + L1/R1 edge-trigger controls applied')
