@@ -1,4 +1,4 @@
-name: Compilar Movie Flow PS3
+name: Compilar FLOW MOVIE 3D
 
 on:
   push:
@@ -57,25 +57,23 @@ jobs:
           mkdir -p pkgfiles/USRDIR/mamba pkgfiles/USRDIR/licenses /tmp/irisman
           curl -fL https://github.com/aldostools/IRISMAN/releases/download/4.91/IRISMAN_4.91.pkg -o /tmp/IRISMAN_4.91.pkg
           python3 scripts/extract_ps3_debug_pkg.py /tmp/IRISMAN_4.91.pkg --out /tmp/irisman --prefix USRDIR/mamba --prefix USRDIR/payloads
-
           find /tmp/irisman -type f -path '*/USRDIR/mamba/mamba_*.bin' -exec cp {} pkgfiles/USRDIR/mamba/ \;
           for P in $(find /tmp/irisman -type f -path '*/USRDIR/payloads/payload_*.bin'); do
             N=$(basename "$P")
             cp "$P" "pkgfiles/USRDIR/mamba/mamba_loader_${N#payload_}"
           done
           curl -fL https://raw.githubusercontent.com/aldostools/Mamba/master/LICENSE -o pkgfiles/USRDIR/licenses/MAMBA-LICENSE.txt
-
           MAMBA_COUNT=$(find pkgfiles/USRDIR/mamba -type f -name 'mamba_*.bin' ! -name 'mamba_loader_*' | wc -l)
           LOADER_COUNT=$(find pkgfiles/USRDIR/mamba -type f -name 'mamba_loader_*.bin' | wc -l)
           echo "Mamba payloads: $MAMBA_COUNT  loaders: $LOADER_COUNT"
           test "$MAMBA_COUNT" -gt 0
           test "$LOADER_COUNT" -gt 0
-          ls -lh pkgfiles/USRDIR/mamba | tail -n 20
 
-      - name: Aplicar modo peliculas solamente
+      - name: Aplicar FLOW MOVIE 3D
         run: |
           python3 scripts/movie_only_patch.py
           python3 scripts/env_patch.py
+          python3 scripts/flow_movie_3d_patch.py
 
       - name: Preparar raw_iso.sprx
         run: |
@@ -94,10 +92,10 @@ jobs:
           ls -lh *.pkg pkgfiles/USRDIR/raw_iso.sprx
           du -sh pkgfiles/USRDIR/mamba
 
-      - name: Guardar PKG Movie Flow PS3
+      - name: Guardar PKG FLOW MOVIE 3D
         uses: actions/upload-artifact@v4
         with:
-          name: MOVIE-FLOW-PS3-PKG
+          name: FLOW-MOVIE-3D-PKG
           path: |
             3disoplayer.pkg
             3disoplayer.gnpdrm.pkg
