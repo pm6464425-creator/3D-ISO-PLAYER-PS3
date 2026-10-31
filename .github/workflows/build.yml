@@ -17,7 +17,7 @@ jobs:
       - name: Instalar dependencias del host
         run: |
           sudo apt-get update
-          sudo apt-get install -y curl jq unzip ca-certificates libelf1 zlib1g libgmp10 libstdc++6 python3-pil fonts-dejavu-core
+          sudo apt-get install -y curl jq unzip ca-certificates libelf1 zlib1g libgmp10 libstdc++6 python3-pil python3-pycryptodome fonts-dejavu-core
 
       - name: Descargar PS3DEV precompilado actual
         run: |
@@ -51,39 +51,30 @@ jobs:
           curl -fL https://raw.githubusercontent.com/ace20022/libudfread/master/src/ecma167.c -o source/ecma167.c
           curl -fL https://raw.githubusercontent.com/nothings/stb/master/stb_image.h -o third_party/include/stb_image.h
 
-      - name: Construir compatibilidad Mamba para CFW clasico
+      - name: Importar Mamba probado de IRISMAN
         run: |
-          rm -rf /tmp/movieflow-mamba
-          git clone --depth 1 https://github.com/aldostools/Mamba.git /tmp/movieflow-mamba
-          mkdir -p pkgfiles/USRDIR/mamba pkgfiles/USRDIR/licenses
-          cd /tmp/movieflow-mamba
-          mkdir -p mamba
+          # No recompilamos Stage2 con GCC moderno. Usamos los binarios del
+          # PKG oficial de IRISMAN, que son los que realmente distribuye.
+          mkdir -p pkgfiles/USRDIR/mamba pkgfiles/USRDIR/licenses /tmp/irisman
+          curl -fL https://github.com/aldostools/IRISMAN/releases/download/4.91/IRISMAN_4.91.pkg -o /tmp/IRISMAN_4.91.pkg
+          curl -fL https://raw.githubusercontent.com/andrebrumdev/gow2-recomp/a7c1f64c825a04bce836059671d8deb2ec0db983/tools/extract_pkg.py -o /tmp/extract_pkg.py
+          python3 /tmp/extract_pkg.py /tmp/IRISMAN_4.91.pkg --out /tmp/irisman --only USRDIR/mamba
+          python3 /tmp/extract_pkg.py /tmp/IRISMAN_4.91.pkg --out /tmp/irisman --only USRDIR/payloads
 
-          # El stage2 antiguo fue escrito para GCC/binutils mucho mas viejos.
-          # Estas opciones reproducen mejor sus supuestos: globals COMMON,
-          # datos via TOC de 64 bits y sin las nuevas secuencias PLT.
-          sed -i 's/^CFLAGS = /CFLAGS = -mno-pltseq -fcommon -mcmodel=medium /' Makefile_release Makefile_loader
-          sed -i 's/ -Os / -O2 /g' Makefile_release Makefile_loader
-          grep -q '^#include <limits.h>' lv2/src/libc_c.c || sed -i '1i#include <limits.h>' lv2/src/libc_c.c
-
-          CEX="421C 430C 431C 440C 441C 446C 450C 453C 455C 460C 465C 466C 470C 475C 476C 478C 480C 481C 482C 483C 484C 485C 486C 487C 488C 489C 490C 491C 492C 493C"
-          DEX="421D 430D 441D 446D 450D 453D 455D 465D 466D 470D 475D 476D 478D 480D 481D 482D 483D 484D 485D 486D 487D 488D 489D 490D 491D 492D 493D"
-          VERSIONS="$CEX $DEX"
-
-          for V in $VERSIONS; do
-            echo "Building Mamba $V"
-            make -f Makefile_release clean >/dev/null
-            make -f Makefile_release MAMBA_VER="$V" all
+          find /tmp/irisman -type f -path '*/USRDIR/mamba/mamba_*.bin' -exec cp {} pkgfiles/USRDIR/mamba/ \;
+          # IRISMAN llama payload_XXXX.bin al loader que instala syscall 1022.
+          for P in $(find /tmp/irisman -type f -path '*/USRDIR/payloads/payload_*.bin'); do
+            N=$(basename "$P")
+            cp "$P" "pkgfiles/USRDIR/mamba/mamba_loader_${N#payload_}"
           done
+          curl -fL https://raw.githubusercontent.com/aldostools/Mamba/master/COPYING -o pkgfiles/USRDIR/licenses/MAMBA-COPYING.txt
 
-          make -f Makefile_loader clean >/dev/null
-          make -f Makefile_loader PAYLOADS="$VERSIONS" $VERSIONS
-
-          cp mamba/mamba_*.bin "$GITHUB_WORKSPACE/pkgfiles/USRDIR/mamba/"
-          cp mamba_loader_*.bin "$GITHUB_WORKSPACE/pkgfiles/USRDIR/mamba/"
-          cp COPYING "$GITHUB_WORKSPACE/pkgfiles/USRDIR/licenses/MAMBA-COPYING.txt"
-          echo "Mamba payloads: $(find "$GITHUB_WORKSPACE/pkgfiles/USRDIR/mamba" -type f | wc -l)"
-          ls -lh "$GITHUB_WORKSPACE/pkgfiles/USRDIR/mamba" | tail -n 10
+          MAMBA_COUNT=$(find pkgfiles/USRDIR/mamba -type f -name 'mamba_*.bin' ! -name 'mamba_loader_*' | wc -l)
+          LOADER_COUNT=$(find pkgfiles/USRDIR/mamba -type f -name 'mamba_loader_*.bin' | wc -l)
+          echo "Mamba payloads: $MAMBA_COUNT  loaders: $LOADER_COUNT"
+          test "$MAMBA_COUNT" -gt 0
+          test "$LOADER_COUNT" -gt 0
+          ls -lh pkgfiles/USRDIR/mamba | tail -n 20
 
       - name: Aplicar modo peliculas solamente
         run: |
