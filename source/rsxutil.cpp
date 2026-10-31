@@ -96,19 +96,31 @@ void init_screen(void *host_addr,u32 size)
 
 void waitflip()
 {
-    while(gcmGetFlipStatus()!=0) usleep(200);
+    while(gcmGetFlipStatus()!=0) usleep(100);
     gcmResetFlipStatus();
 }
 
 void flip()
 {
-    if(!first_fb) waitflip(); else gcmResetFlipStatus();
+    /* Software framebuffer fix:
+       the CPU writes directly into color_buffer[curr_fb].  We must not hand
+       the old front buffer back to the CPU until the newly requested VSync
+       flip has actually completed, otherwise the visible buffer can be
+       partially overwritten and produce the blink/ghost frame seen on PS3. */
+    if(first_fb) {
+        gcmResetFlipStatus();
+        first_fb = 0;
+    }
+
     gcmSetFlip(context,curr_fb);
     rsxFlushBuffer(context);
-    gcmSetWaitFlip(context);
+
+    /* Block the CPU until this exact display flip has completed.  This makes
+       the swap itself the 60 Hz frame pacer and keeps the two buffers clean. */
+    waitflip();
+
     curr_fb ^= 1;
     setRenderTarget(curr_fb);
-    first_fb = 0;
 }
 
 u32* get_back_buffer(void)
