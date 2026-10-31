@@ -1,0 +1,1 @@
+V2.7 renderer optimization prepared from V2.6 visual baseline.
