@@ -1,0 +1,121 @@
+name: Compilar FLOW MOVIE V2.7 FIXED
+
+on:
+  push:
+    branches: [ movie-v2-7 ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Obtener proyecto
+        uses: actions/checkout@v4
+
+      - name: Instalar dependencias del host
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y curl jq unzip git ca-certificates libelf1 zlib1g libgmp10 libstdc++6 python3-pil fonts-dejavu-core
+
+      - name: Descargar PS3DEV
+        run: |
+          URL="https://github.com/ps3dev/ps3dev/releases/download/nightly-2026-10-12/ps3dev-linux-X64.tar.gz"
+          curl --retry 4 --retry-delay 2 -fL "$URL" -o /tmp/ps3dev.tar.gz
+          tar xzf /tmp/ps3dev.tar.gz -C "$GITHUB_WORKSPACE"
+          echo "PS3DEV=$GITHUB_WORKSPACE/ps3dev" >> "$GITHUB_ENV"
+          echo "PSL1GHT=$GITHUB_WORKSPACE/ps3dev" >> "$GITHUB_ENV"
+          echo "$GITHUB_WORKSPACE/ps3dev/bin" >> "$GITHUB_PATH"
+          echo "$GITHUB_WORKSPACE/ps3dev/ppu/bin" >> "$GITHUB_PATH"
+          echo "$GITHUB_WORKSPACE/ps3dev/spu/bin" >> "$GITHUB_PATH"
+
+      - name: Preparar bibliotecas
+        run: |
+          mkdir -p third_party/include third_party/lib pkgfiles/USRDIR pkgfiles/USRDIR/licenses
+          curl -fL https://raw.githubusercontent.com/aldostools/IRISMAN/master/include/ntfs.h -o third_party/include/ntfs.h
+          curl -fL https://raw.githubusercontent.com/aldostools/IRISMAN/master/include/cobra.h -o third_party/include/cobra.h
+          curl -fL https://raw.githubusercontent.com/aldostools/IRISMAN/master/lib/libcobra.a -o third_party/lib/libcobra.a
+          curl -fL https://raw.githubusercontent.com/aldostools/IRISMAN/master/lib/libfatfs.a -o third_party/lib/libfatfs.a
+          curl -fL https://raw.githubusercontent.com/aldostools/IRISMAN/master/lib/libntfs_ext.a -o third_party/lib/libntfs_ext.a
+          curl -fL https://raw.githubusercontent.com/ace20022/libudfread/master/src/udfread.h -o third_party/include/udfread.h
+          curl -fL https://raw.githubusercontent.com/ace20022/libudfread/master/src/blockinput.h -o third_party/include/blockinput.h
+          curl -fL https://raw.githubusercontent.com/ace20022/libudfread/master/src/default_blockinput.h -o third_party/include/default_blockinput.h
+          curl -fL https://raw.githubusercontent.com/ace20022/libudfread/master/src/ecma167.h -o third_party/include/ecma167.h
+          curl -fL https://raw.githubusercontent.com/ace20022/libudfread/master/src/udfread.c -o source/udfread.c
+          curl -fL https://raw.githubusercontent.com/ace20022/libudfread/master/src/ecma167.c -o source/ecma167.c
+          curl -fL https://raw.githubusercontent.com/nothings/stb/master/stb_image.h -o third_party/include/stb_image.h
+
+      - name: Generar V2.7
+        run: |
+          python3 scripts/movie_only_patch.py
+          python3 scripts/env_patch.py
+          python3 scripts/flow_movie_3d_patch.py
+          python3 scripts/flow_movie_3d_fix_v2.py
+          python3 scripts/flow_movie_3d_spooky_v3.py
+          python3 scripts/v46_linkfix.py
+          python3 scripts/flow_movie_3d_v2_dynamic_controls.py
+          python3 scripts/case_v26.py
+          python3 scripts/perf_v27.py
+          cp source/main.cpp generated_main_v27.cpp
+
+      - name: Crear recursos
+        run: |
+          python3 scripts/write_case_v25.py
+          python3 scripts/make_case_v26.py
+          python3 scripts/v17_art.py
+          test -s pkgfiles/USRDIR/CASE_FRAME.PNG
+
+      - name: Validar V2.7
+        run: |
+          grep -q 'BTN_L1' source/main.cpp
+          grep -q 'BTN_R1' source/main.cpp
+          ! grep -q 'BTN_R2' source/main.cpp
+          grep -q 'gettimeofday' source/main.cpp
+          grep -q 'draw_rgba_region_scaled' source/main.cpp
+          grep -q 'V2.7: optimized rounded Blu-ray renderer' source/main.cpp
+          grep -q 'for(int idx=base-3;idx<=base+3;idx++)' source/main.cpp
+          grep -q 'GCM_FLIP_VSYNC' source/rsxutil.cpp
+          ! grep -q 'gcmSetWaitFlip(context);' source/rsxutil.cpp
+          python3 - <<'PY'
+          from pathlib import Path
+          s=Path('source/main.cpp').read_text()
+          r=Path('source/rsxutil.cpp').read_text()
+          assert 'draw_rgba_scaled(x,y,w,h,&g_case_frame)' not in s
+          assert 'draw_rgba_region_scaled' in s
+          assert 'if(x>=screen_w || y>=screen_h || x+w<=0 || y+h<=0) return;' in s
+          assert '        render_ui();\n        usleep(' not in s
+          flip=r[r.index('void flip()'):r.index('u32* get_back_buffer')]
+          assert flip.index('gcmSetFlip(context,curr_fb);') < flip.index('waitflip();') < flip.index('curr_fb ^= 1;')
+          print('OK V2.7 performance path')
+          PY
+
+      - name: Preparar raw_iso.sprx
+        run: |
+          curl -fL https://raw.githubusercontent.com/aldostools/IRISMAN/master/rawseciso/bin2c/rawseciso.c -o /tmp/rawseciso.c
+          python3 -c "import re,pathlib; s=pathlib.Path('/tmp/rawseciso.c').read_text(); m=re.search(r'raw_iso_sprx\\[[^\\]]+\\]\\s*=\\s*\\{(.*?)\\};',s,re.S); assert m; pathlib.Path('pkgfiles/USRDIR/raw_iso.sprx').write_bytes(bytes(int(x,16) for x in re.findall(r'0x([0-9A-Fa-f]{2})',m.group(1))))"
+
+      - name: Compilar y crear PKG
+        run: |
+          ppu-gcc --version
+          make clean
+          make
+          test -s 3disoplayer.elf
+          make pkg
+          test -s 3disoplayer.pkg
+          test -s 3disoplayer.gnpdrm.pkg
+          cp 3disoplayer.pkg FLOW_MOVIE_V2_7.pkg
+          cp 3disoplayer.gnpdrm.pkg FLOW_MOVIE_V2_7_GNPDRM.pkg
+          ls -lh FLOW_MOVIE_V2_7*.pkg
+          sha256sum FLOW_MOVIE_V2_7.pkg FLOW_MOVIE_V2_7_GNPDRM.pkg generated_main_v27.cpp
+
+      - name: Guardar FLOW MOVIE V2.7
+        uses: actions/upload-artifact@v4
+        with:
+          name: FLOW-MOVIE-V2-7-FIXED
+          path: |
+            FLOW_MOVIE_V2_7.pkg
+            FLOW_MOVIE_V2_7_GNPDRM.pkg
+            generated_main_v27.cpp
+          if-no-files-found: error
