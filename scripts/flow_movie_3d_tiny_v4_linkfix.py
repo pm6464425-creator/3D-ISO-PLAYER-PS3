@@ -10,10 +10,14 @@ s=s.replace('extern u32 display_width;\nextern u32 display_height;\n',
 '''static inline u32 get_screen_width(){ return 848u; }\nstatic inline u32 get_screen_height(){ return 512u; }\n''',1)
 s=s.replace('    display_width=848; display_height=512;\n','',1)
 
+# flow_movie_3d_patch includes stb_image.h for JPG/PNG covers. The old cover
+# module used to provide its implementation; V4 owns it directly in main.cpp.
+s=s.replace('#include "stb_image.h"\n','#define STB_IMAGE_IMPLEMENTATION\n#include "stb_image.h"\n',1)
+
 # Guard against any leftover legacy renderer calls in the generated source.
 for forbidden in ('init_screen(', 'get_back_buffer(', '\n    flip();'):
     if forbidden in s:
         raise SystemExit(f'legacy renderer call remains: {forbidden}')
 
 p.write_text(s)
-print('V4 linker fix applied: legacy rsxutil dependency removed')
+print('V4 linker fix applied: legacy rsxutil removed, stb_image implementation enabled')
