@@ -1,5 +1,5 @@
 #include <stdint.h>
-#include <sys/syscall.h>
+#include <ppu-lv2.h>
 #include "ps3_env.h"
 
 #define SC_COBRA_SYSCALL8            8
@@ -11,13 +11,13 @@
 
 static int sc8_one(uint64_t opcode)
 {
-    system_call_1(SC_COBRA_SYSCALL8, opcode);
+    lv2syscall1(SC_COBRA_SYSCALL8, opcode);
     return_to_user_prog(int);
 }
 
 static int sc8_get_version(uint32_t *version)
 {
-    system_call_2(SC_COBRA_SYSCALL8, SC8_GET_VERSION, (uint64_t)(uint32_t)version);
+    lv2syscall2(SC_COBRA_SYSCALL8, SC8_GET_VERSION, (uint64_t)(uintptr_t)version);
     return_to_user_prog(int);
 }
 
