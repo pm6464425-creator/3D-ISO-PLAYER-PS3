@@ -22,6 +22,14 @@ if old not in s:
     raise SystemExit('render background anchor not found')
 s=s.replace(old,new,1)
 
+# waitFinish() is near the top of rsxutil.cpp, while the V2.16/V2.18 helpers
+# are defined later. Add forward declarations so the bounded wait can use them.
+decl_anchor='''static u32 sLabelVal = 1;\n'''
+decls='''static u32 sLabelVal = 1;\n\n/* V2.19 forward declarations for the early waitFinish() path. */\nstatic uint64_t rsx_now_us();\nstatic void rsx_log_waitfinish_timeout(u32 label);\nvoid freeze_diag_phase(int phase);\n'''
+if decl_anchor not in r:
+    raise SystemExit('sLabelVal anchor not found')
+r=r.replace(decl_anchor,decls,1)
+
 old='''        case 30: return "RENDER_UI_DRAW";\n        case 40: return "FRAME_OK_LOOP_TAIL";'''
 new='''        case 30: return "RENDER_UI_DRAW";\n        case 31: return "DRAW_BACKGROUND";\n        case 32: return "RSX_CLEAR_SUBMIT";\n        case 33: return "RSX_CLEAR_WAIT_LABEL";\n        case 34: return "RSX_CLEAR_DONE";\n        case 35: return "DRAW_COVERS_AND_UI";\n        case 40: return "FRAME_OK_LOOP_TAIL";'''
 if old not in r:
