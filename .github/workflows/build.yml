@@ -1,4 +1,4 @@
-name: Compilar FLOW MOVIE 3D V4.1
+name: Compilar FLOW MOVIE 3D V4.2
 
 on:
   push:
@@ -81,7 +81,7 @@ jobs:
           test "$MAMBA_COUNT" -gt 0
           test "$LOADER_COUNT" -gt 0
 
-      - name: Aplicar FLOW MOVIE 3D V4.1
+      - name: Aplicar FLOW MOVIE 3D V4.2
         run: |
           python3 scripts/movie_only_patch.py
           python3 scripts/env_patch.py
@@ -91,6 +91,7 @@ jobs:
           python3 scripts/flow_movie_3d_tiny_v4_safe.py
           python3 scripts/flow_movie_3d_tiny_v4_linkfix.py
           python3 scripts/flow_movie_3d_tiny_v41_blackfix.py
+          python3 scripts/flow_movie_3d_tiny_v42_rsxsafe.py
 
       - name: Preparar raw_iso.sprx
         run: |
@@ -111,10 +112,10 @@ jobs:
           ls -lh *.pkg pkgfiles/USRDIR/raw_iso.sprx pkgfiles/USRDIR/FONT.RAW
           du -sh pkgfiles/USRDIR/mamba
 
-      - name: Guardar PKG FLOW MOVIE 3D V4.1
+      - name: Guardar PKG FLOW MOVIE 3D V4.2
         uses: actions/upload-artifact@v4
         with:
-          name: FLOW-MOVIE-3D-V41-PKG
+          name: FLOW-MOVIE-3D-V42-PKG
           path: |
             3disoplayer.pkg
             3disoplayer.gnpdrm.pkg
