@@ -17,7 +17,8 @@ jobs:
       - name: Instalar dependencias del host
         run: |
           sudo apt-get update
-          sudo apt-get install -y curl jq unzip ca-certificates libelf1 zlib1g libgmp10 libstdc++6 python3-pil python3-pycryptodome fonts-dejavu-core
+          sudo apt-get install -y curl jq unzip ca-certificates libelf1 zlib1g libgmp10 libstdc++6 python3-pil python3-pip fonts-dejavu-core
+          python3 -m pip install --break-system-packages pycryptodome
 
       - name: Descargar PS3DEV precompilado actual
         run: |
@@ -53,8 +54,6 @@ jobs:
 
       - name: Importar Mamba probado de IRISMAN
         run: |
-          # No recompilamos Stage2 con GCC moderno. Usamos los binarios del
-          # PKG oficial de IRISMAN, que son los que realmente distribuye.
           mkdir -p pkgfiles/USRDIR/mamba pkgfiles/USRDIR/licenses /tmp/irisman
           curl -fL https://github.com/aldostools/IRISMAN/releases/download/4.91/IRISMAN_4.91.pkg -o /tmp/IRISMAN_4.91.pkg
           curl -fL https://raw.githubusercontent.com/andrebrumdev/gow2-recomp/a7c1f64c825a04bce836059671d8deb2ec0db983/tools/extract_pkg.py -o /tmp/extract_pkg.py
@@ -62,7 +61,6 @@ jobs:
           python3 /tmp/extract_pkg.py /tmp/IRISMAN_4.91.pkg --out /tmp/irisman --only USRDIR/payloads
 
           find /tmp/irisman -type f -path '*/USRDIR/mamba/mamba_*.bin' -exec cp {} pkgfiles/USRDIR/mamba/ \;
-          # IRISMAN llama payload_XXXX.bin al loader que instala syscall 1022.
           for P in $(find /tmp/irisman -type f -path '*/USRDIR/payloads/payload_*.bin'); do
             N=$(basename "$P")
             cp "$P" "pkgfiles/USRDIR/mamba/mamba_loader_${N#payload_}"
