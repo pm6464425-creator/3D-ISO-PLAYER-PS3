@@ -63,7 +63,7 @@ jobs:
             N=$(basename "$P")
             cp "$P" "pkgfiles/USRDIR/mamba/mamba_loader_${N#payload_}"
           done
-          curl -fL https://raw.githubusercontent.com/aldostools/Mamba/master/COPYING -o pkgfiles/USRDIR/licenses/MAMBA-COPYING.txt
+          curl -fL https://raw.githubusercontent.com/aldostools/Mamba/master/LICENSE -o pkgfiles/USRDIR/licenses/MAMBA-LICENSE.txt
 
           MAMBA_COUNT=$(find pkgfiles/USRDIR/mamba -type f -name 'mamba_*.bin' ! -name 'mamba_loader_*' | wc -l)
           LOADER_COUNT=$(find pkgfiles/USRDIR/mamba -type f -name 'mamba_loader_*.bin' | wc -l)
