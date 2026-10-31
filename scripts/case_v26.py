@@ -70,11 +70,11 @@ new=r'''static void draw_poster(int x, int y, int w, int h, const Movie &m, bool
     int shad=(w>220)?7:4;
     fill_rect(x+shad,y+shad,w,h,0x44000000);
 
-    /* Artwork window coordinates match the remastered 635x695 master frame. */
-    int ax=x+(w*46)/635;
-    int ay=y+(h*104)/695;
-    int ar=x+(w*610)/635;
-    int ab=y+(h*671)/695;
+    /* Artwork window coordinates match the 640x822 remastered master frame. */
+    int ax=x+(w*10)/640;
+    int ay=y+(h*70)/822;
+    int ar=x+(w*630)/640;
+    int ab=y+(h*806)/822;
     int aw=ar-ax;
     int ah=ab-ay;
     if(aw<1) aw=1;
