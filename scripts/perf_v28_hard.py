@@ -26,7 +26,15 @@ if 'void rsx_clear_backbuffer(u32 color)' not in r:
     pos = r.find(marker)
     if pos < 0:
         raise SystemExit('rsx flip anchor not found')
-    helper = r'''\nvoid rsx_clear_backbuffer(u32 color)\n{\n    /* Hardware clear instead of millions of PPU framebuffer writes. */\n    rsxSetClearColor(context,color);\n    rsxClearSurface(context,GCM_CLEAR_R|GCM_CLEAR_G|GCM_CLEAR_B|GCM_CLEAR_A);\n    waitFinish();\n}\n'''
+    helper = '''
+void rsx_clear_backbuffer(u32 color)
+{
+    /* Hardware clear instead of millions of PPU framebuffer writes. */
+    rsxSetClearColor(context,color);
+    rsxClearSurface(context,GCM_CLEAR_R|GCM_CLEAR_G|GCM_CLEAR_B|GCM_CLEAR_A);
+    waitFinish();
+}
+'''
     r = r[:pos] + helper + r[pos:]
 
 bg_start = s.find('static void draw_background()')
