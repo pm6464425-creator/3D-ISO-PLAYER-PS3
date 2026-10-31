@@ -1,0 +1,35 @@
+name: Diagnosticar fuente FLOW MOVIE 3D
+
+on:
+  push:
+    branches: [ movie-only-v1 ]
+  workflow_dispatch:
+
+jobs:
+  generated-source:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: Generar main.cpp exactamente como V4.3
+        run: |
+          python3 scripts/movie_only_patch.py
+          python3 scripts/env_patch.py
+          python3 scripts/flow_movie_3d_patch.py
+          python3 scripts/flow_movie_3d_fix_v2.py
+          python3 scripts/flow_movie_3d_spooky_v3.py
+          python3 scripts/flow_movie_3d_tiny_v4_safe.py
+          python3 scripts/flow_movie_3d_tiny_v4_linkfix.py
+          python3 scripts/flow_movie_3d_tiny_v41_blackfix.py
+          python3 scripts/flow_movie_3d_tiny_v42_rsxsafe.py
+          python3 scripts/flow_movie_3d_v43_antifreeze.py
+          cp source/main.cpp generated_main_v43.cpp
+          wc -l generated_main_v43.cpp
+          sha256sum generated_main_v43.cpp
+      - name: Subir fuente generada
+        uses: actions/upload-artifact@v4
+        with:
+          name: FLOW-MOVIE-3D-GENERATED-SOURCE
+          path: generated_main_v43.cpp
+          if-no-files-found: error
