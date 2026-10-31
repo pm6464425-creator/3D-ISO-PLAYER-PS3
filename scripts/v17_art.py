@@ -8,9 +8,11 @@ font_candidates=[
 ]
 font_path=next((x for x in font_candidates if Path(x).exists()),font_candidates[-1])
 
-# Fuente HD RAW 24x36, con antialiasing.
-FW,FH=24,36
-fnt=ImageFont.truetype(font_path,29)
+# IMPORTANTE: el renderer de source/main.cpp usa exactamente FONT_W=16 y FONT_H=24.
+# Cada glifo del RAW debe ocupar 16*24 bytes; si se genera a otra medida, los offsets
+# de todos los caracteres posteriores quedan desplazados y el texto aparece corrupto.
+FW,FH=16,24
+fnt=ImageFont.truetype(font_path,19)
 raw=bytearray()
 for code in range(32,127):
     im=Image.new('L',(FW,FH),0)
@@ -22,6 +24,9 @@ for code in range(32,127):
     y=max(0,(FH-h)//2-box[1]-1)
     d.text((x,y),ch,font=fnt,fill=255)
     raw.extend(im.tobytes())
+
+expected=95*FW*FH
+assert len(raw)==expected, (len(raw),expected)
 Path('pkgfiles/USRDIR/FONT.RAW').write_bytes(raw)
 
 # Fondo sobrio y original inspirado en la fluidez de interfaces de consola.
@@ -66,4 +71,4 @@ pic1.save('pkgfiles/PIC1.PNG',optimize=True)
 
 # Fondo interno base, sin Spider-Man.
 bg(1920,1080).save('pkgfiles/USRDIR/APPBG.JPG',quality=94,optimize=True)
-print('arte y fuente HD V17 listos')
+print('arte y fuente 16x24 listos')
