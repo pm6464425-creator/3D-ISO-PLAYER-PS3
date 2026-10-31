@@ -1,4 +1,4 @@
-name: Compilar FLOW MOVIE 3D V3
+name: Compilar FLOW MOVIE 3D V4
 
 on:
   push:
@@ -17,7 +17,7 @@ jobs:
       - name: Instalar dependencias del host
         run: |
           sudo apt-get update
-          sudo apt-get install -y curl jq unzip ca-certificates libelf1 zlib1g libgmp10 libstdc++6 python3-pil fonts-dejavu-core
+          sudo apt-get install -y curl jq unzip git ca-certificates libelf1 zlib1g libgmp10 libstdc++6 python3-pil fonts-dejavu-core
 
       - name: Descargar PS3DEV precompilado actual
         run: |
@@ -34,6 +34,18 @@ jobs:
           echo "$GITHUB_WORKSPACE/ps3dev/bin" >> "$GITHUB_PATH"
           echo "$GITHUB_WORKSPACE/ps3dev/ppu/bin" >> "$GITHUB_PATH"
           echo "$GITHUB_WORKSPACE/ps3dev/spu/bin" >> "$GITHUB_PATH"
+
+      - name: Preparar Tiny3D
+        run: |
+          if find "$PS3DEV" -name libtiny3d.a -print -quit | grep -q .; then
+            echo "Tiny3D ya disponible"
+          else
+            rm -rf /tmp/tiny3D
+            git clone --depth 1 https://github.com/wargio/tiny3D /tmp/tiny3D
+            make -C /tmp/tiny3D/lib
+            make -C /tmp/tiny3D/lib install
+          fi
+          find "$PS3DEV" -name libtiny3d.a -print
 
       - name: Preparar bibliotecas NTFS Cobra UDF e imagenes
         run: |
@@ -69,21 +81,24 @@ jobs:
           test "$MAMBA_COUNT" -gt 0
           test "$LOADER_COUNT" -gt 0
 
-      - name: Aplicar FLOW MOVIE 3D V3
+      - name: Aplicar FLOW MOVIE 3D V4
         run: |
           python3 scripts/movie_only_patch.py
           python3 scripts/env_patch.py
           python3 scripts/flow_movie_3d_patch.py
           python3 scripts/flow_movie_3d_fix_v2.py
           python3 scripts/flow_movie_3d_spooky_v3.py
+          python3 scripts/flow_movie_3d_tiny_v4.py
 
       - name: Preparar raw_iso.sprx
         run: |
           curl -fL https://raw.githubusercontent.com/aldostools/IRISMAN/master/rawseciso/bin2c/rawseciso.c -o /tmp/rawseciso.c
           python3 -c "import re,pathlib; s=pathlib.Path('/tmp/rawseciso.c').read_text(); m=re.search(r'raw_iso_sprx\\[[^\\]]+\\]\\s*=\\s*\\{(.*?)\\};',s,re.S); assert m; pathlib.Path('pkgfiles/USRDIR/raw_iso.sprx').write_bytes(bytes(int(x,16) for x in re.findall(r'0x([0-9A-Fa-f]{2})',m.group(1))))"
 
-      - name: Crear arte y fuente
-        run: python3 scripts/v17_art.py
+      - name: Crear arte y fuente HD
+        run: |
+          python3 scripts/v17_art.py
+          python3 scripts/v4_font_art.py
 
       - name: Compilar PKG
         run: |
@@ -91,13 +106,13 @@ jobs:
           make clean
           make
           make pkg
-          ls -lh *.pkg pkgfiles/USRDIR/raw_iso.sprx
+          ls -lh *.pkg pkgfiles/USRDIR/raw_iso.sprx pkgfiles/USRDIR/FONT.RAW
           du -sh pkgfiles/USRDIR/mamba
 
-      - name: Guardar PKG FLOW MOVIE 3D V3
+      - name: Guardar PKG FLOW MOVIE 3D V4
         uses: actions/upload-artifact@v4
         with:
-          name: FLOW-MOVIE-3D-V3-PKG
+          name: FLOW-MOVIE-3D-V4-PKG
           path: |
             3disoplayer.pkg
             3disoplayer.gnpdrm.pkg
