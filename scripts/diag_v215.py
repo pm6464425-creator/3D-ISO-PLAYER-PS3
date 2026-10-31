@@ -13,9 +13,9 @@ if old not in s:
     raise SystemExit('V2.14 geometry anchor not found')
 s=s.replace(old,new,1)
 
-# Persistent log helpers. We intentionally open/flush/close each event so the
-# last line survives a hard hang. Events are low frequency to avoid I/O load.
-anchor='static bool app_running = true;\n'
+# Persistent log helpers. Insert after g_tab so the heartbeat can include the
+# current tab/selection/movie count without forward-declaration problems.
+anchor='static MediaTab g_tab = TAB_BDISO;\n'
 log_code=r'''static const char *FLOW_LOG_PATH="/dev_hdd0/game/3DISO0001/USRDIR/FLOW_MOVIE.LOG";
 static uint64_t g_log_start_us=0;
 static uint64_t g_last_heartbeat_us=0;
@@ -46,17 +46,16 @@ static void flow_log_heartbeat()
     uint64_t now=flow_now_us();
     if(g_last_heartbeat_us && now-g_last_heartbeat_us<5000000ULL) return;
     g_last_heartbeat_us=now;
-    char b[192];
-    snprintf(b,sizeof(b),"tab=%d selected=%d movies=%u fps=%.1f",(int)g_tab,g_selected,(unsigned)g_movies.size(),g_real_fps);
+    char b[160];
+    snprintf(b,sizeof(b),"tab=%d selected=%d movies=%u",(int)g_tab,g_selected,(unsigned)g_movies.size());
     flow_log("HEARTBEAT",b);
 }
 '''
 if anchor not in s:
-    raise SystemExit('app_running anchor not found')
+    raise SystemExit('g_tab anchor not found')
 s=s.replace(anchor,anchor+log_code,1)
 
-# Log cover failures, but only through a tiny one-path suppression window to
-# avoid hammering the HDD every frame if one cover is corrupt.
+# Log cover failures, with path suppression so a corrupt cover cannot flood the log.
 cover_anchor='''    unsigned char *file = read_file_bytes(m, m.cover, &sz);\n    if(!file) return NULL;'''
 cover_new='''    unsigned char *file = read_file_bytes(m, m.cover, &sz);\n    if(!file) {\n        static std::string last_fail;\n        if(last_fail!=m.cover) { flow_log("COVER_READ_FAIL",m.cover.c_str()); last_fail=m.cover; }\n        return NULL;\n    }'''
 if cover_anchor not in s:
@@ -102,8 +101,8 @@ s=s.replace('''        if(l1 && !p_l1) { g_tab = (g_tab==TAB_BDISO) ? TAB_MKV : 
 s=s.replace('''        if(r1 && !p_r1) { g_tab = (g_tab==TAB_MKV) ? TAB_BDISO : TAB_MKV; g_selected=0; rebuild_movies(); g_flow_ready=false; }''',
 '''        if(r1 && !p_r1) { g_tab = (g_tab==TAB_MKV) ? TAB_BDISO : TAB_MKV; g_selected=0; flow_log("TAB_CHANGE","R1"); rebuild_movies(); g_flow_ready=false; }''',1)
 
-# Every 5 s log a heartbeat. Also bracket one render every heartbeat interval so
-# if the last line is RENDER_BEGIN we know the hang occurred in render/flip.
+# Every 5 s log a heartbeat. Bracket one render per heartbeat interval so the
+# last line identifies a render/flip hang without logging every frame.
 render_anchor='''        p_up=up; p_down=down; p_left=left; p_right=right; p_x=x; p_o=o; p_tri=tri; p_l1=l1; p_r1=r1;\n        render_ui();'''
 render_new='''        p_up=up; p_down=down; p_left=left; p_right=right; p_x=x; p_o=o; p_tri=tri; p_l1=l1; p_r1=r1;\n        uint64_t before_hb=g_last_heartbeat_us;\n        flow_log_heartbeat();\n        bool diag_render=(g_last_heartbeat_us!=before_hb);\n        if(diag_render) flow_log("RENDER_BEGIN",NULL);\n        render_ui();\n        if(diag_render) flow_log("RENDER_END",NULL);'''
 if render_anchor not in s:
