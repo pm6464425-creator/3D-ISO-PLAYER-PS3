@@ -1,0 +1,143 @@
+name: Compilar FLOW MOVIE 3D V4.5 DIAG FIXED
+
+on:
+  push:
+    branches: [ movie-only-v1 ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Obtener proyecto
+        uses: actions/checkout@v4
+
+      - name: Instalar dependencias del host
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y curl jq unzip git ca-certificates libelf1 zlib1g libgmp10 libstdc++6 python3-pil fonts-dejavu-core
+
+      - name: Descargar PS3DEV precompilado actual
+        run: |
+          URL=$(curl -fsSL https://api.github.com/repos/ps3dev/ps3dev/releases | jq -r '
+            map(select(.prerelease and (.draft | not)))
+            | sort_by(.published_at) | reverse | .[0].assets[]
+            | select(.name == "ps3dev-linux-X64.tar.gz")
+            | .browser_download_url' | head -n1)
+          test -n "$URL"
+          curl -fL "$URL" -o /tmp/ps3dev.tar.gz
+          tar xzf /tmp/ps3dev.tar.gz -C "$GITHUB_WORKSPACE"
+          echo "PS3DEV=$GITHUB_WORKSPACE/ps3dev" >> "$GITHUB_ENV"
+          echo "PSL1GHT=$GITHUB_WORKSPACE/ps3dev" >> "$GITHUB_ENV"
+          echo "$GITHUB_WORKSPACE/ps3dev/bin" >> "$GITHUB_PATH"
+          echo "$GITHUB_WORKSPACE/ps3dev/ppu/bin" >> "$GITHUB_PATH"
+          echo "$GITHUB_WORKSPACE/ps3dev/spu/bin" >> "$GITHUB_PATH"
+
+      - name: Preparar Tiny3D
+        run: |
+          if find "$PS3DEV" -name libtiny3d.a -print -quit | grep -q .; then
+            echo "Tiny3D ya disponible"
+          else
+            rm -rf /tmp/tiny3D
+            git clone --depth 1 https://github.com/wargio/tiny3D /tmp/tiny3D
+            make -C /tmp/tiny3D/lib
+            make -C /tmp/tiny3D/lib install
+          fi
+          find "$PS3DEV" -name libtiny3d.a -print
+
+      - name: Preparar bibliotecas NTFS Cobra UDF e imagenes
+        run: |
+          mkdir -p third_party/include third_party/lib pkgfiles/USRDIR pkgfiles/USRDIR/licenses
+          curl -fL https://raw.githubusercontent.com/aldostools/IRISMAN/master/include/ntfs.h -o third_party/include/ntfs.h
+          curl -fL https://raw.githubusercontent.com/aldostools/IRISMAN/master/include/cobra.h -o third_party/include/cobra.h
+          curl -fL https://raw.githubusercontent.com/aldostools/IRISMAN/master/lib/libcobra.a -o third_party/lib/libcobra.a
+          curl -fL https://raw.githubusercontent.com/aldostools/IRISMAN/master/lib/libfatfs.a -o third_party/lib/libfatfs.a
+          curl -fL https://raw.githubusercontent.com/aldostools/IRISMAN/master/lib/libntfs_ext.a -o third_party/lib/libntfs_ext.a
+          curl -fL https://raw.githubusercontent.com/ace20022/libudfread/master/src/udfread.h -o third_party/include/udfread.h
+          curl -fL https://raw.githubusercontent.com/ace20022/libudfread/master/src/blockinput.h -o third_party/include/blockinput.h
+          curl -fL https://raw.githubusercontent.com/ace20022/libudfread/master/src/default_blockinput.h -o third_party/include/default_blockinput.h
+          curl -fL https://raw.githubusercontent.com/ace20022/libudfread/master/src/ecma167.h -o third_party/include/ecma167.h
+          curl -fL https://raw.githubusercontent.com/ace20022/libudfread/master/src/udfread.c -o source/udfread.c
+          curl -fL https://raw.githubusercontent.com/ace20022/libudfread/master/src/ecma167.c -o source/ecma167.c
+          curl -fL https://raw.githubusercontent.com/nothings/stb/master/stb_image.h -o third_party/include/stb_image.h
+
+      - name: Importar Mamba probado de IRISMAN
+        run: |
+          rm -rf /tmp/irisman
+          mkdir -p pkgfiles/USRDIR/mamba pkgfiles/USRDIR/licenses /tmp/irisman
+          curl -fL https://github.com/aldostools/IRISMAN/releases/download/4.91/IRISMAN_4.91.pkg -o /tmp/IRISMAN_4.91.pkg
+          python3 scripts/extract_ps3_debug_pkg.py /tmp/IRISMAN_4.91.pkg --out /tmp/irisman --prefix USRDIR/mamba --prefix USRDIR/payloads
+          find /tmp/irisman -type f -path '*/USRDIR/mamba/mamba_*.bin' -exec cp {} pkgfiles/USRDIR/mamba/ \;
+          for P in $(find /tmp/irisman -type f -path '*/USRDIR/payloads/payload_*.bin'); do
+            N=$(basename "$P")
+            cp "$P" "pkgfiles/USRDIR/mamba/mamba_loader_${N#payload_}"
+          done
+          curl -fL https://raw.githubusercontent.com/aldostools/Mamba/master/LICENSE -o pkgfiles/USRDIR/licenses/MAMBA-LICENSE.txt
+
+      - name: Generar FLOW MOVIE 3D V4.5 DIAG
+        run: |
+          python3 scripts/movie_only_patch.py
+          python3 scripts/env_patch.py
+          python3 scripts/flow_movie_3d_patch.py
+          python3 scripts/flow_movie_3d_fix_v2.py
+          python3 scripts/flow_movie_3d_spooky_v3.py
+          python3 scripts/flow_movie_3d_tiny_v4_safe.py
+          python3 scripts/flow_movie_3d_tiny_v4_linkfix.py
+          python3 scripts/flow_movie_3d_tiny_v41_blackfix.py
+          python3 scripts/flow_movie_3d_tiny_v42_rsxsafe.py
+          python3 scripts/flow_movie_3d_v43_antifreeze.py
+          python3 scripts/flow_movie_3d_v44_stable.py
+          python3 scripts/flow_movie_3d_v45_bootlog.py
+          python3 scripts/flow_movie_3d_v45_compilefix.py
+          cp source/main.cpp generated_main_v45.cpp
+
+      - name: Diez rondas de verificacion diagnostica
+        run: |
+          for I in $(seq 1 10); do
+            echo "===== V4.5 VALIDATION ROUND $I / 10 ====="
+            python3 scripts/v45_validate.py source/main.cpp
+          done
+          sha256sum generated_main_v45.cpp
+
+      - name: Preparar raw_iso.sprx
+        run: |
+          curl -fL https://raw.githubusercontent.com/aldostools/IRISMAN/master/rawseciso/bin2c/rawseciso.c -o /tmp/rawseciso.c
+          python3 -c "import re,pathlib; s=pathlib.Path('/tmp/rawseciso.c').read_text(); m=re.search(r'raw_iso_sprx\\[[^\\]]+\\]\\s*=\\s*\\{(.*?)\\};',s,re.S); assert m; pathlib.Path('pkgfiles/USRDIR/raw_iso.sprx').write_bytes(bytes(int(x,16) for x in re.findall(r'0x([0-9A-Fa-f]{2})',m.group(1))))"
+
+      - name: Crear arte y fuente HD
+        run: |
+          python3 scripts/v17_art.py
+          python3 scripts/v4_font_art.py
+
+      - name: Primera compilacion de comprobacion
+        run: |
+          ppu-gcc --version
+          make clean
+          python3 scripts/v45_validate.py source/main.cpp
+          make
+          test -s 3disoplayer.elf
+          ppu-readelf -h 3disoplayer.elf | head -30
+          sha256sum 3disoplayer.elf generated_main_v45.cpp
+
+      - name: Segunda compilacion limpia y PKG
+        run: |
+          make clean
+          python3 scripts/v45_validate.py source/main.cpp
+          make
+          make pkg
+          test -s 3disoplayer.pkg
+          test -s 3disoplayer.gnpdrm.pkg
+          ls -lh 3disoplayer*.pkg 3disoplayer.elf pkgfiles/USRDIR/raw_iso.sprx pkgfiles/USRDIR/FONT.RAW
+          sha256sum 3disoplayer.pkg 3disoplayer.gnpdrm.pkg 3disoplayer.elf generated_main_v45.cpp
+
+      - name: Guardar PKG FLOW MOVIE 3D V4.5 DIAG
+        uses: actions/upload-artifact@v4
+        with:
+          name: FLOW-MOVIE-3D-V45-DIAG-PKG
+          path: |
+            3disoplayer.pkg
+            3disoplayer.gnpdrm.pkg
+            generated_main_v45.cpp
+          if-no-files-found: error
