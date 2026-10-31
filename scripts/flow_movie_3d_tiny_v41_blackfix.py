@@ -44,7 +44,7 @@ if old_init not in s:
 s = s.replace(old_init, new_init, 1)
 
 old_state = '''    tiny3d_Clear(0xFF000000,TINY3D_CLEAR_ALL);\n    tiny3d_AlphaTest(1,0x00,TINY3D_ALPHA_FUNC_GREATER);\n    tiny3d_BlendFunc(1,(blend_src_func)(TINY3D_BLEND_FUNC_SRC_RGB_SRC_ALPHA|TINY3D_BLEND_FUNC_SRC_ALPHA_SRC_ALPHA),\n                     (blend_dst_func)(TINY3D_BLEND_FUNC_DST_RGB_ONE_MINUS_SRC_ALPHA|TINY3D_BLEND_FUNC_DST_ALPHA_ZERO),\n                     (blend_func)(TINY3D_BLEND_RGB_FUNC_ADD|TINY3D_BLEND_ALPHA_FUNC_ADD));\n    tiny3d_Project2D();\n'''
-new_state = '''    tiny3d_Clear(0xFF050914,TINY3D_CLEAR_ALL);\n    tiny3d_AlphaTest(1,0x10,TINY3D_ALPHA_FUNC_GEQUAL);\n    tiny3d_BlendFunc(1,\n                     TINY3D_BLEND_FUNC_SRC_RGB_SRC_ALPHA|TINY3D_BLEND_FUNC_SRC_ALPHA_SRC_ALPHA,\n                     TINY3D_BLEND_FUNC_DST_RGB_ONE_MINUS_SRC_ALPHA|TINY3D_BLEND_FUNC_DST_ALPHA_ZERO,\n                     TINY3D_BLEND_RGB_FUNC_ADD|TINY3D_BLEND_ALPHA_FUNC_ADD);\n    tiny3d_Project2D();\n'''
+new_state = '''    tiny3d_Clear(0xFF050914,TINY3D_CLEAR_ALL);\n    tiny3d_AlphaTest(1,0x10,TINY3D_ALPHA_FUNC_GEQUAL);\n    tiny3d_BlendFunc(1,\n                     (blend_src_func)(TINY3D_BLEND_FUNC_SRC_RGB_SRC_ALPHA|TINY3D_BLEND_FUNC_SRC_ALPHA_SRC_ALPHA),\n                     (blend_dst_func)(TINY3D_BLEND_FUNC_DST_RGB_ONE_MINUS_SRC_ALPHA|TINY3D_BLEND_FUNC_DST_ALPHA_ZERO),\n                     (blend_func)(TINY3D_BLEND_RGB_FUNC_ADD|TINY3D_BLEND_ALPHA_FUNC_ADD));\n    tiny3d_Project2D();\n'''
 if old_state not in s:
     raise SystemExit('Tiny3D frame-state anchor not found')
 s = s.replace(old_state, new_state, 1)
@@ -56,9 +56,9 @@ replace_function('static void do_flip()', r'''static void do_flip(){
     tiny3d_Clear(0xFF050914,TINY3D_CLEAR_ALL);
     tiny3d_AlphaTest(1,0x10,TINY3D_ALPHA_FUNC_GEQUAL);
     tiny3d_BlendFunc(1,
-                     TINY3D_BLEND_FUNC_SRC_RGB_SRC_ALPHA|TINY3D_BLEND_FUNC_SRC_ALPHA_SRC_ALPHA,
-                     TINY3D_BLEND_FUNC_DST_RGB_ONE_MINUS_SRC_ALPHA|TINY3D_BLEND_FUNC_DST_ALPHA_ZERO,
-                     TINY3D_BLEND_RGB_FUNC_ADD|TINY3D_BLEND_ALPHA_FUNC_ADD);
+                     (blend_src_func)(TINY3D_BLEND_FUNC_SRC_RGB_SRC_ALPHA|TINY3D_BLEND_FUNC_SRC_ALPHA_SRC_ALPHA),
+                     (blend_dst_func)(TINY3D_BLEND_FUNC_DST_RGB_ONE_MINUS_SRC_ALPHA|TINY3D_BLEND_FUNC_DST_ALPHA_ZERO),
+                     (blend_func)(TINY3D_BLEND_RGB_FUNC_ADD|TINY3D_BLEND_ALPHA_FUNC_ADD));
     tiny3d_Project2D();
     tiny3d_Flip();
 }''', 'do_flip')
@@ -67,7 +67,7 @@ replace_function('static void do_flip()', r'''static void do_flip(){
 # or compatibility dialogs. This also prevents the user from being left on an
 # untouched black framebuffer during startup work.
 anchor = '    sysUtilRegisterCallback(SYSUTIL_EVENT_SLOT0,sysutil_callback,NULL);\n    load_font();\n'
-prime = '''    sysUtilRegisterCallback(SYSUTIL_EVENT_SLOT0,sysutil_callback,NULL);\n\n    tiny3d_Clear(0xFF050914,TINY3D_CLEAR_ALL);\n    tiny3d_AlphaTest(1,0x10,TINY3D_ALPHA_FUNC_GEQUAL);\n    tiny3d_BlendFunc(1,\n                     TINY3D_BLEND_FUNC_SRC_RGB_SRC_ALPHA|TINY3D_BLEND_FUNC_SRC_ALPHA_SRC_ALPHA,\n                     TINY3D_BLEND_FUNC_DST_RGB_ONE_MINUS_SRC_ALPHA|TINY3D_BLEND_FUNC_DST_ALPHA_ZERO,\n                     TINY3D_BLEND_RGB_FUNC_ADD|TINY3D_BLEND_ALPHA_FUNC_ADD);\n    tiny3d_Project2D();\n    fill_rect(0,0,848,512,0xFF050914);\n    fill_rect(36,36,776,4,0xFF42D4FF);\n    tiny3d_Flip();\n\n    load_font();\n'''
+prime = '''    sysUtilRegisterCallback(SYSUTIL_EVENT_SLOT0,sysutil_callback,NULL);\n\n    tiny3d_Clear(0xFF050914,TINY3D_CLEAR_ALL);\n    tiny3d_AlphaTest(1,0x10,TINY3D_ALPHA_FUNC_GEQUAL);\n    tiny3d_BlendFunc(1,\n                     (blend_src_func)(TINY3D_BLEND_FUNC_SRC_RGB_SRC_ALPHA|TINY3D_BLEND_FUNC_SRC_ALPHA_SRC_ALPHA),\n                     (blend_dst_func)(TINY3D_BLEND_FUNC_DST_RGB_ONE_MINUS_SRC_ALPHA|TINY3D_BLEND_FUNC_DST_ALPHA_ZERO),\n                     (blend_func)(TINY3D_BLEND_RGB_FUNC_ADD|TINY3D_BLEND_ALPHA_FUNC_ADD));\n    tiny3d_Project2D();\n    fill_rect(0,0,848,512,0xFF050914);\n    fill_rect(36,36,776,4,0xFF42D4FF);\n    tiny3d_Flip();\n\n    load_font();\n'''
 if anchor not in s:
     raise SystemExit('startup prime-frame anchor not found')
 s = s.replace(anchor, prime, 1)
