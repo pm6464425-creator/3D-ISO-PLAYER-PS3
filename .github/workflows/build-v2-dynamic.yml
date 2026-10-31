@@ -1,8 +1,8 @@
-name: Compilar FLOW MOVIE 3D V2 DYNAMIC 60FPS
+name: Compilar FLOW MOVIE 3D V2 DYNAMIC 60FPS FLICKER FIX
 
 on:
   push:
-    branches: [ movie-v2-dynamic-60fps ]
+    branches: [ movie-v2-dynamic-60fps-flickerfix ]
   workflow_dispatch:
 
 jobs:
@@ -52,7 +52,7 @@ jobs:
           curl -fL https://raw.githubusercontent.com/ace20022/libudfread/master/src/ecma167.c -o source/ecma167.c
           curl -fL https://raw.githubusercontent.com/nothings/stb/master/stb_image.h -o third_party/include/stb_image.h
 
-      - name: Generar V2 DYNAMIC 60FPS desde la base funcional V2
+      - name: Generar V2 DYNAMIC 60FPS FLICKER FIX desde la base funcional V2
         run: |
           python3 scripts/movie_only_patch.py
           python3 scripts/env_patch.py
@@ -61,9 +61,9 @@ jobs:
           python3 scripts/flow_movie_3d_spooky_v3.py
           python3 scripts/v46_linkfix.py
           python3 scripts/flow_movie_3d_v2_dynamic_controls.py
-          cp source/main.cpp generated_main_v2_dynamic_60fps.cpp
+          cp source/main.cpp generated_main_v2_dynamic_60fps_flickerfix.cpp
 
-      - name: Validar controles y movimiento 60FPS
+      - name: Validar controles movimiento y doble buffer
         run: |
           grep -q 'BTN_L1' source/main.cpp
           grep -q 'BTN_R1' source/main.cpp
@@ -74,13 +74,19 @@ jobs:
           grep -q 'const float dt=1.0f/60.0f;' source/main.cpp
           grep -q 'const float w=21.0f;' source/main.cpp
           grep -q 'GCM_FLIP_VSYNC' source/rsxutil.cpp
+          grep -q 'gcmSetFlip(context,curr_fb);' source/rsxutil.cpp
+          grep -q 'waitflip();' source/rsxutil.cpp
+          ! grep -q 'gcmSetWaitFlip(context);' source/rsxutil.cpp
           python3 - <<'PY'
           from pathlib import Path
           s=Path('source/main.cpp').read_text()
+          r=Path('source/rsxutil.cpp').read_text()
           assert '        render_ui();\n        usleep(' not in s, 'extra post-render sleep still present'
-          print('OK: render loop is VSync-paced with no extra post-render sleep')
+          flip=r[r.index('void flip()'):r.index('u32* get_back_buffer')]
+          assert flip.index('gcmSetFlip(context,curr_fb);') < flip.index('waitflip();') < flip.index('curr_fb ^= 1;')
+          print('OK: VSync flip completes before old front buffer becomes CPU back buffer')
           PY
-          sha256sum generated_main_v2_dynamic_60fps.cpp
+          sha256sum source/rsxutil.cpp generated_main_v2_dynamic_60fps_flickerfix.cpp
 
       - name: Preparar raw_iso.sprx
         run: |
@@ -101,14 +107,14 @@ jobs:
           test -s 3disoplayer.pkg
           test -s 3disoplayer.gnpdrm.pkg
           ls -lh 3disoplayer*.pkg 3disoplayer.elf
-          sha256sum 3disoplayer.pkg 3disoplayer.gnpdrm.pkg 3disoplayer.elf generated_main_v2_dynamic_60fps.cpp
+          sha256sum 3disoplayer.pkg 3disoplayer.gnpdrm.pkg 3disoplayer.elf generated_main_v2_dynamic_60fps_flickerfix.cpp
 
-      - name: Guardar FLOW MOVIE 3D V2 DYNAMIC 60FPS
+      - name: Guardar FLOW MOVIE 3D V2 DYNAMIC 60FPS FLICKER FIX
         uses: actions/upload-artifact@v4
         with:
-          name: FLOW-MOVIE-3D-V2-DYNAMIC-60FPS
+          name: FLOW-MOVIE-3D-V2-DYNAMIC-60FPS-FLICKER-FIX
           path: |
             3disoplayer.pkg
             3disoplayer.gnpdrm.pkg
-            generated_main_v2_dynamic_60fps.cpp
+            generated_main_v2_dynamic_60fps_flickerfix.cpp
           if-no-files-found: error
