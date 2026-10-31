@@ -40,7 +40,7 @@ export DEPSDIR  := $(CURDIR)/$(BUILD)
 export BUILDDIR := $(CURDIR)/$(BUILD)
 
 CFILES      := $(foreach dir,$(SOURCES),$(notdir $(wildcard $(dir)/*.c)))
-CPPFILES    := $(filter-out rsxutil.cpp,$(foreach dir,$(SOURCES),$(notdir $(wildcard $(dir)/*.cpp))))
+CPPFILES    := $(filter-out rsxutil.cpp background.cpp cover_net.cpp cover_udf.cpp,$(foreach dir,$(SOURCES),$(notdir $(wildcard $(dir)/*.cpp))))
 sFILES      := $(foreach dir,$(SOURCES),$(notdir $(wildcard $(dir)/*.s)))
 SFILES      := $(foreach dir,$(SOURCES),$(notdir $(wildcard $(dir)/*.S)))
 
