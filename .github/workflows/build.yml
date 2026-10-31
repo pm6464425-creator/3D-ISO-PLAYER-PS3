@@ -59,9 +59,11 @@ jobs:
           cd /tmp/movieflow-mamba
           mkdir -p mamba
 
-          # GCC moderno genera secuencias PLT que el antiguo stage2 de Mamba
-          # no necesita y que provocan ICE en algunos toolchains PowerPC.
+          # El stage2 antiguo fue escrito para GCC viejos. Con GCC PowerPC
+          # moderno evitamos PLTSEQ y el modo -Os, que activa rutinas savres
+          # fuera de linea y provoca un ICE del compilador.
           sed -i 's/^CFLAGS = /CFLAGS = -mno-pltseq /' Makefile_release Makefile_loader
+          sed -i 's/ -Os / -O2 /g' Makefile_release Makefile_loader
 
           # Targets explicitly backed by the current Mamba source. 3.55 uses a
           # legacy implementation and is intentionally not mixed into this path.
