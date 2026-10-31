@@ -64,6 +64,9 @@ jobs:
           # fuera de linea y provoca un ICE del compilador.
           sed -i 's/^CFLAGS = /CFLAGS = -mno-pltseq /' Makefile_release Makefile_loader
           sed -i 's/ -Os / -O2 /g' Makefile_release Makefile_loader
+          # El libc privado de Mamba usa ULLONG_MAX pero el codigo historico
+          # dependia de que el toolchain lo expusiera indirectamente.
+          grep -q '^#include <limits.h>' lv2/src/libc_c.c || sed -i '1i#include <limits.h>' lv2/src/libc_c.c
 
           # Targets explicitly backed by the current Mamba source. 3.55 uses a
           # legacy implementation and is intentionally not mixed into this path.
