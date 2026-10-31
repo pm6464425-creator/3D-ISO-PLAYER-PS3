@@ -3,8 +3,6 @@ from pathlib import Path
 p = Path('source/main.cpp')
 s = p.read_text()
 
-# Add RSX flip status/depth helpers. Tiny3D exposes the GCM context; the depth
-# helpers are exported by its commands module but not declared in tiny3d.h.
 anchor = '#include <tiny3d.h>\n'
 extra = '''#include <rsx/gcm_sys.h>\nextern \"C\" {\nvoid rsxtiny_DepthTestEnable(void *context, uint32_t enable);\nvoid rsxtiny_DepthWriteEnable(void *context, uint32_t enable);\n}\n'''
 if '#include <rsx/gcm_sys.h>' not in s:
@@ -38,21 +36,15 @@ if 'flow_wait_gpu_frame_done' not in s:
         raise SystemExit('screen helper anchor not found')
     s = s.replace(helper_anchor, helper_anchor + helpers, 1)
 
-# Restore the same vertex-buffer size and full-screen virtual viewport pattern
-# used by the reference Tiny3D application.
 s = s.replace('''    int tiny3d_rc = tiny3d_Init(1024u*1024u);\n    if(tiny3d_rc != 0) return 10;\n''',
 '''    int tiny3d_rc = tiny3d_Init(4u*1024u*1024u);\n    if(tiny3d_rc != 0) return 10;\n    tiny3d_UserViewport(1,0.0f,0.0f,(float)Video_Resolution.width/848.0f,(float)Video_Resolution.height/512.0f,\n                        (float)Video_Resolution.width/1920.0f,(float)Video_Resolution.height/1080.0f);\n''',1)
 
-# Replace every V4.1 frame-state block with one safe helper so all paths use the
-# same GPU wait, blend state and disabled 2D depth test.
 state = '''    tiny3d_Clear(0xFF050914,TINY3D_CLEAR_ALL);\n    tiny3d_AlphaTest(1,0x10,TINY3D_ALPHA_FUNC_GEQUAL);\n    tiny3d_BlendFunc(1,\n                     (blend_src_func)(TINY3D_BLEND_FUNC_SRC_RGB_SRC_ALPHA|TINY3D_BLEND_FUNC_SRC_ALPHA_SRC_ALPHA),\n                     (blend_dst_func)(TINY3D_BLEND_FUNC_DST_RGB_ONE_MINUS_SRC_ALPHA|TINY3D_BLEND_FUNC_DST_ALPHA_ZERO),\n                     (blend_func)(TINY3D_BLEND_RGB_FUNC_ADD|TINY3D_BLEND_ALPHA_FUNC_ADD));\n    tiny3d_Project2D();\n'''
 s = s.replace(state, '    flow_begin_frame();\n')
 
-# V4's normal render path used a black clear state rather than the V4.1 state.
 state2 = '''    tiny3d_Clear(0xFF000000,TINY3D_CLEAR_ALL);\n    tiny3d_AlphaTest(1,0x00,TINY3D_ALPHA_FUNC_GREATER);\n    tiny3d_BlendFunc(1,(blend_src_func)(TINY3D_BLEND_FUNC_SRC_RGB_SRC_ALPHA|TINY3D_BLEND_FUNC_SRC_ALPHA_SRC_ALPHA),\n                     (blend_dst_func)(TINY3D_BLEND_FUNC_DST_RGB_ONE_MINUS_SRC_ALPHA|TINY3D_BLEND_FUNC_DST_ALPHA_ZERO),\n                     (blend_func)(TINY3D_BLEND_RGB_FUNC_ADD|TINY3D_BLEND_ALPHA_FUNC_ADD));\n    tiny3d_Project2D();\n'''
 s = s.replace(state2, '    flow_begin_frame();\n')
 
-# Make do_flip simple and deterministic for system dialogs.
 def replace_function(signature, new_text, label):
     global s
     start=s.find(signature)
@@ -71,12 +63,9 @@ def replace_function(signature, new_text, label):
 replace_function('static void do_flip()', r'''static void do_flip(){
     sysUtilCheckCallback();
     flow_begin_frame();
-    fill_rect(0,0,848,512,0xFF050914);
     tiny3d_Flip();
 }''', 'do_flip')
 
-# Replace the priming section with a clearly visible, persistent RSX-only splash.
-# No font, NTFS, Mamba or cover code participates in these frames.
 start = s.find('    sysUtilRegisterCallback(SYSUTIL_EVENT_SLOT0,sysutil_callback,NULL);\n')
 load = s.find('    load_font();\n', start)
 if start < 0 or load < 0:
@@ -97,8 +86,6 @@ startup = r'''
 '''
 s = s[:start] + startup + s[load:]
 
-# Once the font atlas exists, show a second startup frame long enough that a
-# backend stall can no longer look like a black-screen renderer failure.
 font_anchor = '    flow_init_font_texture();\n'
 font_splash = r'''    flow_init_font_texture();
     for(int boot_frame=0; boot_frame<24; ++boot_frame){
