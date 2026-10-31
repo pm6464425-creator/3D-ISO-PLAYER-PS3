@@ -59,9 +59,10 @@ jobs:
           cd /tmp/movieflow-mamba
           mkdir -p mamba
 
-          # Retail/debug CFW combinations backed by the current Mamba symbol set.
-          CEX="355C 421C 430C 431C 440C 441C 446C 450C 453C 455C 460C 465C 466C 470C 475C 476C 478C 480C 481C 482C 483C 484C 485C 486C 487C 488C 489C 490C 491C 492C 493C"
-          DEX="355D 421D 430D 441D 446D 450D 453D 455D 460D 465D 466D 470D 475D 476D 478D 480D 481D 482D 483D 484D 485D 486D 487D 488D 489D 490D 491D 492D 493D"
+          # Targets explicitly backed by the current Mamba source. 3.55 uses a
+          # legacy implementation and is intentionally not mixed into this path.
+          CEX="421C 430C 431C 440C 441C 446C 450C 453C 455C 460C 465C 466C 470C 475C 476C 478C 480C 481C 482C 483C 484C 485C 486C 487C 488C 489C 490C 491C 492C 493C"
+          DEX="421D 430D 441D 446D 450D 453D 455D 465D 466D 470D 475D 476D 478D 480D 481D 482D 483D 484D 485D 486D 487D 488D 489D 490D 491D 492D 493D"
           VERSIONS="$CEX $DEX"
 
           for V in $VERSIONS; do
@@ -70,7 +71,6 @@ jobs:
             make -f Makefile_release MAMBA_VER="$V" all
           done
 
-          # The loader makefile accepts an overridden payload list, including newer FW.
           make -f Makefile_loader clean >/dev/null
           make -f Makefile_loader PAYLOADS="$VERSIONS" $VERSIONS
 
