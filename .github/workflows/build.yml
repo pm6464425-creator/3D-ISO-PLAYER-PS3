@@ -17,8 +17,7 @@ jobs:
       - name: Instalar dependencias del host
         run: |
           sudo apt-get update
-          sudo apt-get install -y curl jq unzip ca-certificates libelf1 zlib1g libgmp10 libstdc++6 python3-pil python3-pip fonts-dejavu-core
-          python3 -m pip install --break-system-packages pycryptodome
+          sudo apt-get install -y curl jq unzip ca-certificates libelf1 zlib1g libgmp10 libstdc++6 python3-pil fonts-dejavu-core
 
       - name: Descargar PS3DEV precompilado actual
         run: |
@@ -54,11 +53,10 @@ jobs:
 
       - name: Importar Mamba probado de IRISMAN
         run: |
+          rm -rf /tmp/irisman
           mkdir -p pkgfiles/USRDIR/mamba pkgfiles/USRDIR/licenses /tmp/irisman
           curl -fL https://github.com/aldostools/IRISMAN/releases/download/4.91/IRISMAN_4.91.pkg -o /tmp/IRISMAN_4.91.pkg
-          curl -fL https://raw.githubusercontent.com/andrebrumdev/gow2-recomp/a7c1f64c825a04bce836059671d8deb2ec0db983/tools/extract_pkg.py -o /tmp/extract_pkg.py
-          python3 /tmp/extract_pkg.py /tmp/IRISMAN_4.91.pkg --out /tmp/irisman --only USRDIR/mamba
-          python3 /tmp/extract_pkg.py /tmp/IRISMAN_4.91.pkg --out /tmp/irisman --only USRDIR/payloads
+          python3 scripts/extract_ps3_debug_pkg.py /tmp/IRISMAN_4.91.pkg --out /tmp/irisman --prefix USRDIR/mamba --prefix USRDIR/payloads
 
           find /tmp/irisman -type f -path '*/USRDIR/mamba/mamba_*.bin' -exec cp {} pkgfiles/USRDIR/mamba/ \;
           for P in $(find /tmp/irisman -type f -path '*/USRDIR/payloads/payload_*.bin'); do
