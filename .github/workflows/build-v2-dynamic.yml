@@ -1,3 +1,4 @@
+# Trigger: flicker-fix build
 name: Compilar FLOW MOVIE 3D V2 DYNAMIC 60FPS FLICKER FIX
 
 on:
