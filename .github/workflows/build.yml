@@ -88,7 +88,7 @@ jobs:
           python3 scripts/flow_movie_3d_patch.py
           python3 scripts/flow_movie_3d_fix_v2.py
           python3 scripts/flow_movie_3d_spooky_v3.py
-          python3 scripts/flow_movie_3d_tiny_v4.py
+          python3 scripts/flow_movie_3d_tiny_v4_safe.py
 
       - name: Preparar raw_iso.sprx
         run: |
