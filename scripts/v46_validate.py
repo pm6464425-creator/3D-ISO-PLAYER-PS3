@@ -4,13 +4,18 @@ p=Path(sys.argv[1] if len(sys.argv)>1 else 'source/main.cpp')
 s=p.read_text()
 main=s[s.find('int main('):]
 preloop=main.split('while(app_running)',1)[0] if 'while(app_running)' in main else main
+mk=Path('Makefile').read_text()
+stb=Path('source/stb_image_impl.c').read_text() if Path('source/stb_image_impl.c').exists() else ''
 checks=[
 ('software renderer only', '#include <tiny3d.h>' not in s and 'tiny3d_' not in s),
 ('legacy RSX renderer retained', '#include "rsxutil.h"' in s and 'init_screen(host_addr,HOST_SIZE)' in main),
+('rsxutil compiled by Makefile', 'filter-out background.cpp cover_net.cpp cover_udf.cpp' in mk and 'filter-out rsxutil.cpp' not in mk),
+('Tiny3D removed from production link', '-ltiny3d' not in mk),
+('stb_image implementation restored', '#define STB_IMAGE_IMPLEMENTATION' in stb),
 ('persistent boot log', 'FLOW_MOVIE_3D_BOOT.LOG' in s and 'FLOW_MOVIE_3D_BOOT_PREV.LOG' in s),
 ('log before renderer init', 'boot_stage(3,"legacy init_screen enter")' in main),
 ('no automatic Mamba bootstrap', 'mamba_bootstrap_if_needed(' not in main),
-('first software frame before library scan', main.find('render_ui();') < main.find('rebuild_movies();')),
+('first software frame before library scan', main.find('render_ui();') >= 0 and main.find('rebuild_movies();') >= 0 and main.find('render_ui();') < main.find('rebuild_movies();')),
 ('no automatic NTFS startup scan', 'refresh_usb_state(true)' not in preloop),
 ('no periodic NTFS polling', 'poll_counter' not in main and 'refresh_usb_state(false)' not in main),
 ('manual triangle NTFS refresh kept', 'TRIANGLE manual NTFS refresh enter' in main and 'refresh_usb_state(true)' in main),
