@@ -1,9 +1,12 @@
+#include "ps3_env.h"
+
 /*
- * Compatibilidad mínima: algunas versiones de libcobra.a publicadas con
- * IRISMAN no exportan is_cobra_based(), aunque cobra.h lo declare.
- * El montaje real sigue validándose por el resultado de cobra_load_vsh_plugin().
+ * Compatibility shim for libcobra builds that declare is_cobra_based()
+ * without exporting it. Unlike the old stub, this now reflects the
+ * active HEN/Cobra/Mamba syscall8 environment.
  */
 int is_cobra_based(void)
 {
-    return 1;
+    ps3_env_info env = ps3_detect_env();
+    return ps3_env_has_cobra_api(&env);
 }
