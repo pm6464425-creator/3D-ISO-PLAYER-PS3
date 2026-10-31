@@ -1,0 +1,126 @@
+name: Compilar FLOW MOVIE V2.15
+
+on:
+  push:
+    branches: [ movie-v2-15 ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Obtener proyecto
+        uses: actions/checkout@v4
+
+      - name: Instalar dependencias
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y curl jq unzip git ca-certificates libelf1 zlib1g libgmp10 libstdc++6 python3-pil fonts-dejavu-core
+
+      - name: Descargar PS3DEV
+        run: |
+          curl --retry 4 --retry-delay 2 -fL "https://github.com/ps3dev/ps3dev/releases/download/nightly-2026-10-12/ps3dev-linux-X64.tar.gz" -o /tmp/ps3dev.tar.gz
+          tar xzf /tmp/ps3dev.tar.gz -C "$GITHUB_WORKSPACE"
+          echo "PS3DEV=$GITHUB_WORKSPACE/ps3dev" >> "$GITHUB_ENV"
+          echo "PSL1GHT=$GITHUB_WORKSPACE/ps3dev" >> "$GITHUB_ENV"
+          echo "$GITHUB_WORKSPACE/ps3dev/bin" >> "$GITHUB_PATH"
+          echo "$GITHUB_WORKSPACE/ps3dev/ppu/bin" >> "$GITHUB_PATH"
+          echo "$GITHUB_WORKSPACE/ps3dev/spu/bin" >> "$GITHUB_PATH"
+
+      - name: Preparar bibliotecas
+        run: |
+          mkdir -p third_party/include third_party/lib pkgfiles/USRDIR pkgfiles/USRDIR/licenses
+          curl -fL https://raw.githubusercontent.com/aldostools/IRISMAN/master/include/ntfs.h -o third_party/include/ntfs.h
+          curl -fL https://raw.githubusercontent.com/aldostools/IRISMAN/master/include/cobra.h -o third_party/include/cobra.h
+          curl -fL https://raw.githubusercontent.com/aldostools/IRISMAN/master/lib/libcobra.a -o third_party/lib/libcobra.a
+          curl -fL https://raw.githubusercontent.com/aldostools/IRISMAN/master/lib/libfatfs.a -o third_party/lib/libfatfs.a
+          curl -fL https://raw.githubusercontent.com/aldostools/IRISMAN/master/lib/libntfs_ext.a -o third_party/lib/libntfs_ext.a
+          curl -fL https://raw.githubusercontent.com/ace20022/libudfread/master/src/udfread.h -o third_party/include/udfread.h
+          curl -fL https://raw.githubusercontent.com/ace20022/libudfread/master/src/blockinput.h -o third_party/include/blockinput.h
+          curl -fL https://raw.githubusercontent.com/ace20022/libudfread/master/src/default_blockinput.h -o third_party/include/default_blockinput.h
+          curl -fL https://raw.githubusercontent.com/ace20022/libudfread/master/src/ecma167.h -o third_party/include/ecma167.h
+          curl -fL https://raw.githubusercontent.com/ace20022/libudfread/master/src/udfread.c -o source/udfread.c
+          curl -fL https://raw.githubusercontent.com/ace20022/libudfread/master/src/ecma167.c -o source/ecma167.c
+          curl -fL https://raw.githubusercontent.com/nothings/stb/master/stb_image.h -o third_party/include/stb_image.h
+
+      - name: Generar V2.15
+        run: |
+          python3 scripts/movie_only_patch.py
+          python3 scripts/env_patch.py
+          python3 scripts/flow_movie_3d_patch.py
+          python3 scripts/flow_movie_3d_fix_v2.py
+          python3 scripts/flow_movie_3d_spooky_v3.py
+          python3 scripts/v46_linkfix.py
+          python3 scripts/flow_movie_3d_v2_dynamic_controls.py
+          python3 scripts/case_v26.py
+          python3 scripts/perf_v27.py
+          python3 scripts/perf_v27b.py
+          python3 scripts/perf_v28_hard.py
+          python3 scripts/slow_v210_safe.py
+          python3 scripts/visual_v211_reference.py
+          python3 scripts/visual_v212_standard_case.py
+          python3 scripts/stability_v213.py
+          python3 scripts/zoom_v214.py
+          python3 scripts/diag_v215.py
+          python3 scripts/diag_v215_persist.py
+          cp source/main.cpp generated_main_v215.cpp
+
+      - name: Crear recursos
+        run: |
+          python3 scripts/write_case_v25.py
+          python3 scripts/make_case_v26.py
+          python3 scripts/v17_art.py
+          test -s pkgfiles/USRDIR/CASE_FRAME.PNG
+          cat > pkgfiles/USRDIR/LOG_INFO.TXT <<'EOF'
+          FLOW MOVIE diagnostic log:
+          /dev_hdd0/game/3DISO0001/USRDIR/FLOW_MOVIE.LOG
+          The log persists across restarts. Copy it after a freeze for diagnosis.
+          EOF
+
+      - name: Validar V2.15
+        run: |
+          grep -q 'const float sel_h=sh\*0.484f;' source/main.cpp
+          grep -q 'const float nb_h=sh\*0.308f;' source/main.cpp
+          grep -q 'const float aspect=(135.0f/172.0f)\*1.06f;' source/main.cpp
+          grep -q 'FLOW_MOVIE.LOG' source/main.cpp
+          grep -q 'HEARTBEAT' source/main.cpp
+          grep -q 'RENDER_BEGIN' source/main.cpp
+          grep -q 'USB_REFRESH_BEGIN' source/main.cpp
+          grep -q 'poll_counter>=1800' source/main.cpp
+          ! grep -q 'remove(FLOW_LOG_PATH)' source/main.cpp
+          ! grep -q 'memset(out,0,sizeof(CoverBitmap))' source/main.cpp
+          grep -q 'covers_per_second=1.72f' source/main.cpp
+          grep -q 'draw_rgba_region_scaled(x,y,w,top_dst' source/main.cpp
+          grep -q 'rsx_clear_backbuffer' source/main.cpp
+          grep -q 'GCM_FLIP_VSYNC' source/rsxutil.cpp
+
+      - name: Preparar raw_iso.sprx
+        run: |
+          curl -fL https://raw.githubusercontent.com/aldostools/IRISMAN/master/rawseciso/bin2c/rawseciso.c -o /tmp/rawseciso.c
+          python3 -c "import re,pathlib; s=pathlib.Path('/tmp/rawseciso.c').read_text(); m=re.search(r'raw_iso_sprx\\[[^\\]]+\\]\\s*=\\s*\\{(.*?)\\};',s,re.S); assert m; pathlib.Path('pkgfiles/USRDIR/raw_iso.sprx').write_bytes(bytes(int(x,16) for x in re.findall(r'0x([0-9A-Fa-f]{2})',m.group(1))))"
+
+      - name: Compilar y crear PKG
+        run: |
+          ppu-gcc --version
+          make clean
+          make
+          test -s 3disoplayer.elf
+          make pkg
+          test -s 3disoplayer.pkg
+          test -s 3disoplayer.gnpdrm.pkg
+          cp 3disoplayer.pkg FLOW_MOVIE_V2_15.pkg
+          cp 3disoplayer.gnpdrm.pkg FLOW_MOVIE_V2_15_GNPDRM.pkg
+          sha256sum FLOW_MOVIE_V2_15.pkg FLOW_MOVIE_V2_15_GNPDRM.pkg generated_main_v215.cpp
+
+      - name: Guardar FLOW MOVIE V2.15
+        uses: actions/upload-artifact@v4
+        with:
+          name: FLOW-MOVIE-V2-15
+          path: |
+            FLOW_MOVIE_V2_15.pkg
+            FLOW_MOVIE_V2_15_GNPDRM.pkg
+            generated_main_v215.cpp
+          if-no-files-found: error
