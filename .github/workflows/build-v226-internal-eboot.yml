@@ -1,0 +1,35 @@
+name: Compilar FLOW MOVIE V2.26 INTERNAL PLAYER EBOOT
+
+on:
+  push:
+    branches: [ movie-v2-26 ]
+    paths:
+      - 'scripts/build_v226_internal_ci.sh'
+      - 'scripts/mkv_v226_internal_player.py'
+      - '.github/workflows/build-v226-internal-eboot.yml'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Obtener proyecto
+        uses: actions/checkout@v4
+
+      - name: Construir y verificar V2.26
+        run: bash scripts/build_v226_internal_ci.sh
+
+      - name: Guardar V2.26 INTERNAL PLAYER
+        uses: actions/upload-artifact@v4
+        with:
+          name: FLOW-MOVIE-V2-26-INTERNAL-PLAYER-EBOOT
+          path: |
+            FLOW_MOVIE_V2_26_INTERNAL_PLAYER.pkg
+            FLOW_MOVIE_V2_26_INTERNAL_PLAYER_GNPDRM.pkg
+            internal_player.sha256
+            generated_main_v226.cpp
+            generated_rsxutil_v226.cpp
+          if-no-files-found: error
