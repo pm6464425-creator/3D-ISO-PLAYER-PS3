@@ -1,0 +1,295 @@
+name: Compilar FLOW MOVIE V2.27 INTERNAL SELF LOG
+
+on:
+  push:
+    branches: [ movie-v2-27 ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Obtener FLOW MOVIE
+        uses: actions/checkout@v4
+
+      - name: Instalar dependencias host
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            curl git ca-certificates build-essential pkg-config \
+            autoconf automake libtool cmake ninja-build \
+            yasm nasm bison flex xz-utils unzip \
+            libelf1 zlib1g libgmp10 libstdc++6 \
+            python3 python3-pil fonts-dejavu-core
+
+      - name: Compilar Movian Next como SELF plano con FLOW_PLAYER.LOG
+        run: |
+          rm -rf /tmp/movian-next
+          git clone --depth 1 --branch v1.0.0 https://github.com/Cruslan/PS3-Movian-Next.git /tmp/movian-next
+
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('/tmp/movian-next/src/arch/ps3/ps3_main.c')
+          s=p.read_text()
+
+          if '#include <stdarg.h>' not in s:
+              s=s.replace('#include <stdio.h>\n', '#include <stdio.h>\n#include <stdarg.h>\n', 1)
+
+          anchor='static uint64_t ticks_per_us;\n'
+          helper=r'''
+
+#define FLOW_PLAYER_LOG_PATH "/dev_hdd0/game/3DISO0001/USRDIR/FLOW_PLAYER.LOG"
+
+static void
+flow_player_log(const char *tag, const char *fmt, ...)
+{
+  FILE *fp = fopen(FLOW_PLAYER_LOG_PATH, "a");
+  if(fp == NULL)
+    return;
+
+  struct timeval tv;
+  gettimeofday(&tv, NULL);
+  fprintf(fp, "[%lld.%03lld] %s", (long long)tv.tv_sec,
+          (long long)(tv.tv_usec / 1000), tag ? tag : "PLAYER");
+  if(fmt != NULL && *fmt) {
+    fprintf(fp, " | ");
+    va_list ap;
+    va_start(ap, fmt);
+    vfprintf(fp, fmt, ap);
+    va_end(ap);
+  }
+  fputc('\n', fp);
+  fflush(fp);
+  fclose(fp);
+}
+'''
+          if 'FLOW_PLAYER_LOG_PATH' not in s:
+              if anchor not in s:
+                  raise SystemExit('ticks_per_us anchor not found')
+              s=s.replace(anchor, anchor+helper, 1)
+
+          old='''static void\nps3_early_init(int argc, char **argv)\n{\n  char buf[PATH_MAX], *x;'''
+          new='''static void\nps3_early_init(int argc, char **argv)\n{\n  char buf[PATH_MAX], *x;\n\n  flow_player_log("PLAYER_START", "argc=%d argv0=%s argv1=%s",\n                  argc,\n                  (argc > 0 && argv && argv[0]) ? argv[0] : "<null>",\n                  (argc > 1 && argv && argv[1]) ? argv[1] : "<null>");'''
+          if old not in s:
+              raise SystemExit('ps3_early_init anchor not found')
+          s=s.replace(old,new,1)
+
+          old='''  netInitialize();\n  netCtlInit();'''
+          new='''  netInitialize();\n  netCtlInit();\n  flow_player_log("NET_INIT_DONE", "network initialized");'''
+          if old not in s:
+              raise SystemExit('net init anchor not found')
+          s=s.replace(old,new,1)
+
+          old='''  gconf.cache_path = strdup(buf);\n  SysLoadModule(SYSMODULE_RTC);'''
+          new='''  gconf.cache_path = strdup(buf);\n  flow_player_log("PATHS_READY", "binary=%s dirname=%s persistent=%s cache=%s",\n                  gconf.binary ? gconf.binary : "<null>",\n                  gconf.dirname ? gconf.dirname : "<null>",\n                  gconf.persistent_path ? gconf.persistent_path : "<null>",\n                  gconf.cache_path ? gconf.cache_path : "<null>");\n  SysLoadModule(SYSMODULE_RTC);'''
+          if old not in s:
+              raise SystemExit('path setup anchor not found')
+          s=s.replace(old,new,1)
+
+          # Capture Movian TRACE output in the persistent player log too.
+          old='''void\ntrace_arch(int level, const char *prefix, const char *str)\n{\n  printf("[%s] %s\\n", prefix, str);\n  fflush(stdout);\n}'''
+          new='''void\ntrace_arch(int level, const char *prefix, const char *str)\n{\n  printf("[%s] %s\\n", prefix, str);\n  fflush(stdout);\n  flow_player_log("TRACE", "[%s] %s", prefix ? prefix : "?", str ? str : "");\n}'''
+          if old not in s:
+              raise SystemExit('trace_arch anchor not found')
+          s=s.replace(old,new,1)
+
+          old='''    thread_dump();\n\n    exit(0);'''
+          new='''    flow_player_log("CRASH_EVENT", "exec catcher received event source=%llu data1=%llu data2=%llu data3=%llu",\n                    (unsigned long long)event.source,\n                    (unsigned long long)event.data1,\n                    (unsigned long long)event.data2,\n                    (unsigned long long)event.data3);\n    thread_dump();\n\n    exit(0);'''
+          if old not in s:
+              raise SystemExit('exec catcher anchor not found')
+          s=s.replace(old,new,1)
+
+          # Embedded engine must never overwrite FLOW MOVIE PARAM.SFO / ICON0.PNG.
+          old='static int no_sfo_overwrite;'
+          new='static int no_sfo_overwrite = 1;'
+          if old not in s:
+              raise SystemExit('no_sfo_overwrite anchor not found')
+          s=s.replace(old,new,1)
+
+          old='''  main_init();\n\n  sysprop = prop_create(prop_get_global(), "system");'''
+          new='''  flow_player_log("MAIN_INIT_BEGIN", "initial_url will be parsed by Movian core");\n  main_init();\n  flow_player_log("MAIN_INIT_END", "core initialized");\n\n  sysprop = prop_create(prop_get_global(), "system");'''
+          if old not in s:
+              raise SystemExit('main_init anchor not found')
+          s=s.replace(old,new,1)
+
+          old='''  extern void glw_ps3_start(void);\n  glw_ps3_start();\n\n  main_fini();'''
+          new='''  extern void glw_ps3_start(void);\n  flow_player_log("GLW_START", "entering Movian UI/player loop");\n  glw_ps3_start();\n  flow_player_log("GLW_RETURNED", "UI/player loop returned");\n\n  main_fini();'''
+          if old not in s:
+              raise SystemExit('glw start anchor not found')
+          s=s.replace(old,new,1)
+
+          p.write_text(s)
+          print('Patched Movian Next with FLOW_PLAYER.LOG and embedded-mode protection')
+          PY
+
+          cd /tmp/movian-next
+          make prepare
+          make -j2 self
+          test -s build/movian.self
+          test "$(stat -c%s build/movian.self)" -gt 1000000
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('build/movian.self')
+          magic=p.read_bytes()[:4]
+          print('movian.self bytes=',p.stat().st_size,'magic=',magic.hex())
+          assert magic == b'SCE\x00', magic
+          src=Path('src/arch/ps3/ps3_main.c').read_text()
+          for needle in ['FLOW_PLAYER_LOG_PATH','PLAYER_START','CRASH_EVENT','no_sfo_overwrite = 1','GLW_START']:
+              assert needle in src, needle
+          PY
+
+          cd "$GITHUB_WORKSPACE"
+          mkdir -p pkgfiles/USRDIR/licenses
+          cp /tmp/movian-next/build/movian.self pkgfiles/USRDIR/flow_player.self
+          cp /tmp/movian-next/LICENSE pkgfiles/USRDIR/licenses/MOVIAN_GPLv3.txt
+          printf '%s\n' \
+            'FLOW MOVIE internal multimedia engine: Movian Next v1.0.0' \
+            'Upstream source: https://github.com/Cruslan/PS3-Movian-Next/tree/v1.0.0' \
+            'Built as plain SELF and patched only for FLOW_PLAYER.LOG + embedded-mode SFO protection.' \
+            > pkgfiles/USRDIR/licenses/MOVIAN_SOURCE.txt
+          sha256sum pkgfiles/USRDIR/flow_player.self | tee internal_player_v227.sha256
+
+      - name: Descargar PS3DEV para FLOW MOVIE
+        run: |
+          curl --retry 4 --retry-delay 2 -fL "https://github.com/ps3dev/ps3dev/releases/download/nightly-2026-10-12/ps3dev-linux-X64.tar.gz" -o /tmp/ps3dev-flow.tar.gz
+          rm -rf "$GITHUB_WORKSPACE/ps3dev"
+          tar xzf /tmp/ps3dev-flow.tar.gz -C "$GITHUB_WORKSPACE"
+          echo "PS3DEV=$GITHUB_WORKSPACE/ps3dev" >> "$GITHUB_ENV"
+          echo "PSL1GHT=$GITHUB_WORKSPACE/ps3dev" >> "$GITHUB_ENV"
+          echo "$GITHUB_WORKSPACE/ps3dev/bin" >> "$GITHUB_PATH"
+          echo "$GITHUB_WORKSPACE/ps3dev/ppu/bin" >> "$GITHUB_PATH"
+          echo "$GITHUB_WORKSPACE/ps3dev/spu/bin" >> "$GITHUB_PATH"
+
+      - name: Preparar bibliotecas FLOW MOVIE
+        run: |
+          mkdir -p third_party/include third_party/lib pkgfiles/USRDIR
+          curl -fL https://raw.githubusercontent.com/aldostools/IRISMAN/master/include/ntfs.h -o third_party/include/ntfs.h
+          curl -fL https://raw.githubusercontent.com/aldostools/IRISMAN/master/include/cobra.h -o third_party/include/cobra.h
+          curl -fL https://raw.githubusercontent.com/aldostools/IRISMAN/master/lib/libcobra.a -o third_party/lib/libcobra.a
+          curl -fL https://raw.githubusercontent.com/aldostools/IRISMAN/master/lib/libfatfs.a -o third_party/lib/libfatfs.a
+          curl -fL https://raw.githubusercontent.com/aldostools/IRISMAN/master/lib/libntfs_ext.a -o third_party/lib/libntfs_ext.a
+          curl -fL https://raw.githubusercontent.com/ace20022/libudfread/master/src/udfread.h -o third_party/include/udfread.h
+          curl -fL https://raw.githubusercontent.com/ace20022/libudfread/master/src/blockinput.h -o third_party/include/blockinput.h
+          curl -fL https://raw.githubusercontent.com/ace20022/libudfread/master/src/default_blockinput.h -o third_party/include/default_blockinput.h
+          curl -fL https://raw.githubusercontent.com/ace20022/libudfread/master/src/ecma167.h -o third_party/include/ecma167.h
+          curl -fL https://raw.githubusercontent.com/ace20022/libudfread/master/src/udfread.c -o source/udfread.c
+          curl -fL https://raw.githubusercontent.com/ace20022/libudfread/master/src/ecma167.c -o source/ecma167.c
+          curl -fL https://raw.githubusercontent.com/nothings/stb/master/stb_image.h -o third_party/include/stb_image.h
+
+      - name: Generar V2.27
+        run: |
+          python3 scripts/movie_only_patch.py
+          python3 scripts/env_patch.py
+          python3 scripts/flow_movie_3d_patch.py
+          python3 scripts/flow_movie_3d_fix_v2.py
+          python3 scripts/flow_movie_3d_spooky_v3.py
+          python3 scripts/v46_linkfix.py
+          python3 scripts/flow_movie_3d_v2_dynamic_controls.py
+          python3 scripts/case_v26.py
+          python3 scripts/perf_v27.py
+          python3 scripts/perf_v27b.py
+          python3 scripts/perf_v28_hard.py
+          python3 scripts/slow_v210_safe.py
+          python3 scripts/visual_v211_reference.py
+          python3 scripts/visual_v212_standard_case.py
+          python3 scripts/stability_v213.py
+          python3 scripts/zoom_v214.py
+          python3 scripts/diag_v215.py
+          python3 scripts/diag_v215_persist.py
+          python3 scripts/fix_v216_fastusb_watchdog.py
+          python3 scripts/fix_v217_60fps_runtime_stable.py
+          python3 scripts/freeze_diag_v218.py
+          python3 scripts/stability_v219_rsx_waitfinish.py
+          python3 scripts/stability_v222_safe_cmd_reset.py
+          python3 scripts/hotplug_v223_auto_usb.py
+          python3 scripts/input_v224_stable_pad.py
+          python3 scripts/mkv_v225_movian_launch.py
+          python3 scripts/mkv_v226_internal_player.py
+          python3 scripts/mkv_v227_plain_self_log.py
+          cp source/main.cpp generated_main_v227.cpp
+          cp source/rsxutil.cpp generated_rsxutil_v227.cpp
+
+      - name: Crear recursos
+        run: |
+          python3 scripts/write_case_v25.py
+          python3 scripts/make_case_v26.py
+          python3 scripts/v17_art.py
+          test -s pkgfiles/USRDIR/CASE_FRAME.PNG
+
+      - name: Validar V2.27 y regresiones
+        run: |
+          grep -q 'FLOW MOVIE V2.27 INTERNAL SELF LOG' source/main.cpp
+          grep -q '/dev_hdd0/game/3DISO0001/USRDIR/flow_player.self' source/main.cpp
+          grep -q 'MKV_PLAYER_LOG_PATH' source/main.cpp
+          grep -q 'FLOW_PLAYER.LOG' source/main.cpp
+          grep -q 'const char \*launchargv\[2\];' source/main.cpp
+          grep -q 'launchargv\[0\]=url.c_str();' source/main.cpp
+          grep -q 'launchargv\[1\]=NULL;' source/main.cpp
+          ! grep -q 'launchargv\[0\]=player;' source/main.cpp
+          ! grep -q 'La reproduccion MKV se conectara al motor multimedia' source/main.cpp
+          test -s pkgfiles/USRDIR/flow_player.self
+          test -s pkgfiles/USRDIR/licenses/MOVIAN_GPLv3.txt
+          test -s pkgfiles/USRDIR/licenses/MOVIAN_SOURCE.txt
+          grep -q 'pad_sample.len>0' source/main.cpp
+          grep -q 'nav_repeat_delay=24' source/main.cpp
+          grep -q 'if(++poll_counter>=120)' source/main.cpp
+          grep -q 'USB_HOTPLUG_CHANGE' source/main.cpp
+          grep -q 'CMD_BUFFER_SAFE_RESET' source/rsxutil.cpp
+          grep -q 'CMD_BUFFER_RESET_BEGIN' source/rsxutil.cpp
+          grep -q 'rsxResetCommandBuffer(context);' source/rsxutil.cpp
+          grep -q 'context->current=context->begin;' source/rsxutil.cpp
+          grep -q 'RSX_WAITFINISH_TIMEOUT' source/rsxutil.cpp
+          grep -q 'RSX_FLIP_TIMEOUT' source/rsxutil.cpp
+          grep -q 'GCM_FLIP_VSYNC' source/rsxutil.cpp
+          grep -q 'covers_per_second=1.72f' source/main.cpp
+          ! grep -q 'rsx_reserve_safe' source/rsxutil.cpp
+          ! grep -q 'FIFO_RESERVE_CALLBACK' source/rsxutil.cpp
+          ! grep -q 'memset(out,0,sizeof(CoverBitmap))' source/main.cpp
+
+      - name: Preparar raw_iso.sprx
+        run: |
+          curl -fL https://raw.githubusercontent.com/aldostools/IRISMAN/master/rawseciso/bin2c/rawseciso.c -o /tmp/rawseciso.c
+          python3 -c "import re,pathlib; s=pathlib.Path('/tmp/rawseciso.c').read_text(); m=re.search(r'raw_iso_sprx\\[[^\\]]+\\]\\s*=\\s*\\{(.*?)\\};',s,re.S); assert m; pathlib.Path('pkgfiles/USRDIR/raw_iso.sprx').write_bytes(bytes(int(x,16) for x in re.findall(r'0x([0-9A-Fa-f]{2})',m.group(1))))"
+
+      - name: Compilar y crear PKG
+        run: |
+          make clean
+          make
+          test -s 3disoplayer.elf
+          make pkg
+          test -s 3disoplayer.pkg
+          test -s 3disoplayer.gnpdrm.pkg
+          cp 3disoplayer.pkg FLOW_MOVIE_V2_27_INTERNAL_SELF_LOG.pkg
+          cp 3disoplayer.gnpdrm.pkg FLOW_MOVIE_V2_27_INTERNAL_SELF_LOG_GNPDRM.pkg
+
+      - name: Verificar SELF dentro del PKG final
+        run: |
+          rm -rf /tmp/v227_verify
+          python3 scripts/extract_ps3_debug_pkg.py FLOW_MOVIE_V2_27_INTERNAL_SELF_LOG.pkg --out /tmp/v227_verify --prefix USRDIR/flow_player.self --prefix USRDIR/licenses/MOVIAN_GPLv3.txt --prefix USRDIR/licenses/MOVIAN_SOURCE.txt
+          test -s /tmp/v227_verify/USRDIR/flow_player.self
+          test -s /tmp/v227_verify/USRDIR/licenses/MOVIAN_GPLv3.txt
+          test -s /tmp/v227_verify/USRDIR/licenses/MOVIAN_SOURCE.txt
+          cmp pkgfiles/USRDIR/flow_player.self /tmp/v227_verify/USRDIR/flow_player.self
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('/tmp/v227_verify/USRDIR/flow_player.self')
+          assert p.read_bytes()[:4] == b'SCE\x00'
+          assert p.stat().st_size > 1000000
+          print('PLAIN SELF VERIFIED INSIDE FINAL PKG', p.stat().st_size)
+          PY
+          sha256sum FLOW_MOVIE_V2_27_INTERNAL_SELF_LOG.pkg FLOW_MOVIE_V2_27_INTERNAL_SELF_LOG_GNPDRM.pkg pkgfiles/USRDIR/flow_player.self generated_main_v227.cpp generated_rsxutil_v227.cpp
+
+      - name: Guardar V2.27
+        uses: actions/upload-artifact@v4
+        with:
+          name: FLOW-MOVIE-V2-27-INTERNAL-SELF-LOG
+          path: |
+            FLOW_MOVIE_V2_27_INTERNAL_SELF_LOG.pkg
+            FLOW_MOVIE_V2_27_INTERNAL_SELF_LOG_GNPDRM.pkg
+            internal_player_v227.sha256
+            generated_main_v227.cpp
+            generated_rsxutil_v227.cpp
+          if-no-files-found: error
