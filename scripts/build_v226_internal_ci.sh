@@ -1,0 +1,128 @@
+#!/usr/bin/env bash
+set -euxo pipefail
+
+sudo apt-get update
+sudo apt-get install -y curl jq unzip git ca-certificates libelf1 zlib1g libgmp10 libstdc++6 python3-pil fonts-dejavu-core
+
+curl --retry 4 --retry-delay 2 -fL "https://github.com/ps3dev/ps3dev/releases/download/nightly-2026-10-12/ps3dev-linux-X64.tar.gz" -o /tmp/ps3dev.tar.gz
+tar xzf /tmp/ps3dev.tar.gz -C "$GITHUB_WORKSPACE"
+export PS3DEV="$GITHUB_WORKSPACE/ps3dev"
+export PSL1GHT="$GITHUB_WORKSPACE/ps3dev"
+export PATH="$GITHUB_WORKSPACE/ps3dev/bin:$GITHUB_WORKSPACE/ps3dev/ppu/bin:$GITHUB_WORKSPACE/ps3dev/spu/bin:$PATH"
+
+mkdir -p third_party/include third_party/lib pkgfiles/USRDIR pkgfiles/USRDIR/licenses
+curl -fL https://raw.githubusercontent.com/aldostools/IRISMAN/master/include/ntfs.h -o third_party/include/ntfs.h
+curl -fL https://raw.githubusercontent.com/aldostools/IRISMAN/master/include/cobra.h -o third_party/include/cobra.h
+curl -fL https://raw.githubusercontent.com/aldostools/IRISMAN/master/lib/libcobra.a -o third_party/lib/libcobra.a
+curl -fL https://raw.githubusercontent.com/aldostools/IRISMAN/master/lib/libfatfs.a -o third_party/lib/libfatfs.a
+curl -fL https://raw.githubusercontent.com/aldostools/IRISMAN/master/lib/libntfs_ext.a -o third_party/lib/libntfs_ext.a
+curl -fL https://raw.githubusercontent.com/ace20022/libudfread/master/src/udfread.h -o third_party/include/udfread.h
+curl -fL https://raw.githubusercontent.com/ace20022/libudfread/master/src/blockinput.h -o third_party/include/blockinput.h
+curl -fL https://raw.githubusercontent.com/ace20022/libudfread/master/src/default_blockinput.h -o third_party/include/default_blockinput.h
+curl -fL https://raw.githubusercontent.com/ace20022/libudfread/master/src/ecma167.h -o third_party/include/ecma167.h
+curl -fL https://raw.githubusercontent.com/ace20022/libudfread/master/src/udfread.c -o source/udfread.c
+curl -fL https://raw.githubusercontent.com/ace20022/libudfread/master/src/ecma167.c -o source/ecma167.c
+curl -fL https://raw.githubusercontent.com/nothings/stb/master/stb_image.h -o third_party/include/stb_image.h
+
+# Bundle the official Movian Next executable as FLOW MOVIE's internal MKV engine.
+curl --retry 4 --retry-delay 2 -fL "https://github.com/Cruslan/PS3-Movian-Next/releases/download/v1.0.0/movian-next.pkg" -o /tmp/movian-next.pkg
+echo "d9c315387dcb6e0e3a34d343b93607cfd79d18669b22940b08edbee8ea6291fa  /tmp/movian-next.pkg" | sha256sum -c -
+rm -rf /tmp/movian_extract
+python3 scripts/extract_ps3_debug_pkg.py /tmp/movian-next.pkg --out /tmp/movian_extract --prefix USRDIR/EBOOT.BIN
+test -s /tmp/movian_extract/USRDIR/EBOOT.BIN
+cp /tmp/movian_extract/USRDIR/EBOOT.BIN pkgfiles/USRDIR/flow_player.self
+test "$(stat -c%s pkgfiles/USRDIR/flow_player.self)" -gt 1000000
+python3 - <<'PY'
+from pathlib import Path
+p=Path('pkgfiles/USRDIR/flow_player.self')
+b=p.read_bytes()[:4]
+print('flow_player.self size=',p.stat().st_size,'magic=',b.hex())
+assert b == b'SCE\x00', f'unexpected SELF/EBOOT magic: {b!r}'
+PY
+curl -fL "https://raw.githubusercontent.com/Cruslan/PS3-Movian-Next/v1.0.0/LICENSE" -o pkgfiles/USRDIR/licenses/MOVIAN_GPLv3.txt
+test -s pkgfiles/USRDIR/licenses/MOVIAN_GPLv3.txt
+sha256sum pkgfiles/USRDIR/flow_player.self | tee internal_player.sha256
+
+python3 scripts/movie_only_patch.py
+python3 scripts/env_patch.py
+python3 scripts/flow_movie_3d_patch.py
+python3 scripts/flow_movie_3d_fix_v2.py
+python3 scripts/flow_movie_3d_spooky_v3.py
+python3 scripts/v46_linkfix.py
+python3 scripts/flow_movie_3d_v2_dynamic_controls.py
+python3 scripts/case_v26.py
+python3 scripts/perf_v27.py
+python3 scripts/perf_v27b.py
+python3 scripts/perf_v28_hard.py
+python3 scripts/slow_v210_safe.py
+python3 scripts/visual_v211_reference.py
+python3 scripts/visual_v212_standard_case.py
+python3 scripts/stability_v213.py
+python3 scripts/zoom_v214.py
+python3 scripts/diag_v215.py
+python3 scripts/diag_v215_persist.py
+python3 scripts/fix_v216_fastusb_watchdog.py
+python3 scripts/fix_v217_60fps_runtime_stable.py
+python3 scripts/freeze_diag_v218.py
+python3 scripts/stability_v219_rsx_waitfinish.py
+python3 scripts/stability_v222_safe_cmd_reset.py
+python3 scripts/hotplug_v223_auto_usb.py
+python3 scripts/input_v224_stable_pad.py
+python3 scripts/mkv_v225_movian_launch.py
+python3 scripts/mkv_v226_internal_player.py
+cp source/main.cpp generated_main_v226.cpp
+cp source/rsxutil.cpp generated_rsxutil_v226.cpp
+
+python3 scripts/write_case_v25.py
+python3 scripts/make_case_v26.py
+python3 scripts/v17_art.py
+test -s pkgfiles/USRDIR/CASE_FRAME.PNG
+
+# V2.26 + regression validation
+grep -q 'FLOW MOVIE V2.26 INTERNAL PLAYER' source/main.cpp
+grep -q '/dev_hdd0/game/3DISO0001/USRDIR/flow_player.self' source/main.cpp
+grep -q 'movian_url_for_movie' source/main.cpp
+grep -q 'sysProcessExitSpawn2' source/main.cpp
+grep -q 'launchargv\[0\]=player;' source/main.cpp
+grep -q 'launchargv\[1\]=url.c_str();' source/main.cpp
+grep -q 'launchargv\[2\]=NULL;' source/main.cpp
+grep -q 'MKV_LAUNCH_BEGIN' source/main.cpp
+! grep -q 'La reproduccion MKV se conectara al motor multimedia' source/main.cpp
+test -s pkgfiles/USRDIR/flow_player.self
+grep -q 'pad_sample.len>0' source/main.cpp
+grep -q 'nav_repeat_delay=24' source/main.cpp
+grep -q 'if(++poll_counter>=120)' source/main.cpp
+grep -q 'USB_HOTPLUG_CHANGE' source/main.cpp
+grep -q 'CMD_BUFFER_SAFE_RESET' source/rsxutil.cpp
+grep -q 'CMD_BUFFER_RESET_BEGIN' source/rsxutil.cpp
+grep -q 'rsxResetCommandBuffer(context);' source/rsxutil.cpp
+grep -q 'context->current=context->begin;' source/rsxutil.cpp
+grep -q 'RSX_WAITFINISH_TIMEOUT' source/rsxutil.cpp
+grep -q 'RSX_FLIP_TIMEOUT' source/rsxutil.cpp
+grep -q 'GCM_FLIP_VSYNC' source/rsxutil.cpp
+grep -q 'covers_per_second=1.72f' source/main.cpp
+! grep -q 'rsx_reserve_safe' source/rsxutil.cpp
+! grep -q 'FIFO_RESERVE_CALLBACK' source/rsxutil.cpp
+! grep -q 'memset(out,0,sizeof(CoverBitmap))' source/main.cpp
+
+curl -fL https://raw.githubusercontent.com/aldostools/IRISMAN/master/rawseciso/bin2c/rawseciso.c -o /tmp/rawseciso.c
+python3 -c "import re,pathlib; s=pathlib.Path('/tmp/rawseciso.c').read_text(); m=re.search(r'raw_iso_sprx\\[[^\\]]+\\]\\s*=\\s*\\{(.*?)\\};',s,re.S); assert m; pathlib.Path('pkgfiles/USRDIR/raw_iso.sprx').write_bytes(bytes(int(x,16) for x in re.findall(r'0x([0-9A-Fa-f]{2})',m.group(1))))"
+
+ppu-gcc --version
+make clean
+make
+test -s 3disoplayer.elf
+make pkg
+test -s 3disoplayer.pkg
+test -s 3disoplayer.gnpdrm.pkg
+cp 3disoplayer.pkg FLOW_MOVIE_V2_26_INTERNAL_PLAYER.pkg
+cp 3disoplayer.gnpdrm.pkg FLOW_MOVIE_V2_26_INTERNAL_PLAYER_GNPDRM.pkg
+
+# Verify the internal engine actually survived packaging byte-for-byte.
+rm -rf /tmp/v226_verify
+python3 scripts/extract_ps3_debug_pkg.py FLOW_MOVIE_V2_26_INTERNAL_PLAYER.pkg --out /tmp/v226_verify --prefix USRDIR/flow_player.self --prefix USRDIR/licenses/MOVIAN_GPLv3.txt
+test -s /tmp/v226_verify/USRDIR/flow_player.self
+test -s /tmp/v226_verify/USRDIR/licenses/MOVIAN_GPLv3.txt
+cmp pkgfiles/USRDIR/flow_player.self /tmp/v226_verify/USRDIR/flow_player.self
+echo 'INTERNAL PLAYER VERIFIED INSIDE FINAL PKG'
+sha256sum FLOW_MOVIE_V2_26_INTERNAL_PLAYER.pkg FLOW_MOVIE_V2_26_INTERNAL_PLAYER_GNPDRM.pkg pkgfiles/USRDIR/flow_player.self generated_main_v226.cpp generated_rsxutil_v226.cpp
