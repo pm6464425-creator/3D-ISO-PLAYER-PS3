@@ -1,0 +1,71 @@
+name: Export SpookyFlow Stage MP4
+
+on:
+  push:
+    branches: [ stage-video-export ]
+  workflow_dispatch:
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout exporter
+        uses: actions/checkout@v4
+
+      - name: Install host tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential git ffmpeg python3-pil
+
+      - name: Clone SpookyFlow source
+        run: |
+          rm -rf /tmp/spookyflow
+          git clone --depth 1 https://github.com/spookyjbp/spookyflow.git /tmp/spookyflow
+
+      - name: Prepare exact Stage assets and renderer
+        run: |
+          rm -rf /tmp/stage_raw /tmp/stage_cases /tmp/stage_frames
+          mkdir -p /tmp/stage_frames
+          python3 scripts/prepare_spooky_stage_export.py /tmp/spookyflow /tmp/stage_raw /tmp/stage_cases
+
+      - name: Build official host preview renderer
+        working-directory: /tmp/spookyflow
+        run: |
+          make -f Makefile.host build-host/preview
+
+      - name: Render Stage live animation
+        working-directory: /tmp/spookyflow
+        env:
+          SF_PREVIEW_STAGE: /tmp/stage_raw
+          SF_PREVIEW_CASES: /tmp/stage_cases
+          SF_PREVIEW_STAGE_VIDEO: "1"
+        run: |
+          ./build-host/preview /tmp/stage_frames
+          test -s /tmp/stage_frames/stage_0000.ppm
+          test -s /tmp/stage_frames/stage_0599.ppm
+          echo "Rendered frames: $(find /tmp/stage_frames -name 'stage_*.ppm' | wc -l)"
+
+      - name: Encode Full HD MP4
+        run: |
+          ffmpeg -y -framerate 60 -i /tmp/stage_frames/stage_%04d.ppm \
+            -vf "scale=1920:1080:flags=lanczos" \
+            -c:v libx264 -preset slow -crf 14 -profile:v high -level 4.2 \
+            -pix_fmt yuv420p -movflags +faststart -an \
+            SPOOKYFLOW_STAGE_ORIGINAL_MOTION_1080P60.mp4
+          ffprobe -v error -select_streams v:0 \
+            -show_entries stream=codec_name,profile,width,height,r_frame_rate,bit_rate \
+            -of default=noprint_wrappers=1 SPOOKYFLOW_STAGE_ORIGINAL_MOTION_1080P60.mp4 | tee stage_video_info.txt
+          sha256sum SPOOKYFLOW_STAGE_ORIGINAL_MOTION_1080P60.mp4 | tee stage_video.sha256
+
+      - name: Upload MP4
+        uses: actions/upload-artifact@v4
+        with:
+          name: SPOOKYFLOW-STAGE-ORIGINAL-MOTION-1080P60
+          path: |
+            SPOOKYFLOW_STAGE_ORIGINAL_MOTION_1080P60.mp4
+            stage_video_info.txt
+            stage_video.sha256
+          if-no-files-found: error
