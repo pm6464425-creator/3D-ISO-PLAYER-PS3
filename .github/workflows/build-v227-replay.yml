@@ -1,0 +1,31 @@
+name: Compilar FLOW MOVIE V2.27 REPLAY SUBMODULES
+
+on:
+  push:
+    branches: [ movie-v2-27 ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Obtener FLOW MOVIE
+        uses: actions/checkout@v4
+
+      - name: Ejecutar V2.27 corregido con submodulos Movian
+        run: python3 scripts/replay_v227_fixed.py
+
+      - name: Guardar V2.27 corregido
+        uses: actions/upload-artifact@v4
+        with:
+          name: FLOW-MOVIE-V2-27-INTERNAL-SELF-LOG-REPLAY
+          path: |
+            FLOW_MOVIE_V2_27_INTERNAL_SELF_LOG.pkg
+            FLOW_MOVIE_V2_27_INTERNAL_SELF_LOG_GNPDRM.pkg
+            internal_player_v227.sha256
+            generated_main_v227.cpp
+            generated_rsxutil_v227.cpp
+          if-no-files-found: error
