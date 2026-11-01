@@ -53,6 +53,7 @@ static std::string movian_url_for_movie(const Movie &movie)
 }
 
 #define MKV_ERR_MOVIAN_NOT_FOUND (-25001)
+#define MKV_ERR_SPAWN_RETURNED    (-25002)
 
 static int launch_mkv_in_movian(const Movie &movie)
 {
@@ -68,13 +69,13 @@ static int launch_mkv_in_movian(const Movie &movie)
     snprintf(detail,sizeof(detail),"player=%s url=%s",player,url.c_str());
     flow_log("MKV_LAUNCH_BEGIN",detail);
 
-    /* On success this replaces FLOW MOVIE, so the call does not return.
-       If it returns, keep the current app alive and report the error. */
-    int ret=sysProcessExitSpawn2(player,launchargv,NULL,NULL,0,1001,
-                                 SYS_PROCESS_SPAWN_STACK_SIZE_1M);
-    snprintf(detail,sizeof(detail),"spawn_ret=0x%08X",ret);
-    flow_log("MKV_LAUNCH_FAIL",detail);
-    return ret;
+    /* PSL1GHT declares sysProcessExitSpawn2() as void. On success it replaces
+       this process and never returns. If execution continues, treat that as
+       launch failure and return to the FLOW MOVIE UI with a clear error. */
+    sysProcessExitSpawn2(player,launchargv,NULL,NULL,0,1001,
+                         SYS_PROCESS_SPAWN_STACK_SIZE_1M);
+    flow_log("MKV_LAUNCH_RETURNED","sysProcessExitSpawn2 returned unexpectedly");
+    return MKV_ERR_SPAWN_RETURNED;
 }
 
 static int mount_bd_iso(const Movie &movie)
@@ -84,7 +85,7 @@ if anchor not in s:
 s=s.replace(anchor,helper,1)
 
 old='''            } else {\n                show_ok("MKV detectado.\\n\\nLa reproduccion MKV se conectara al motor multimedia en la siguiente etapa.");\n            }'''
-new='''            } else {\n                int ret=launch_mkv_in_movian(movie);\n                if(ret==MKV_ERR_MOVIAN_NOT_FOUND) {\n                    show_ok("No se encontro Movian/Showtime.\\n\\nInstala Movian (HTSS00003) o Movian Next con movian.self para reproducir MKV.");\n                } else {\n                    char err[512];\n                    snprintf(err,sizeof(err),"No se pudo iniciar Movian. Error: 0x%08X",ret);\n                    show_ok(err);\n                }\n            }'''
+new='''            } else {\n                int ret=launch_mkv_in_movian(movie);\n                if(ret==MKV_ERR_MOVIAN_NOT_FOUND) {\n                    show_ok("No se encontro Movian/Showtime.\\n\\nInstala Movian (HTSS00003) o Movian Next con movian.self para reproducir MKV.");\n                } else {\n                    show_ok("Movian no pudo iniciarse.\\n\\nRevisa que movian.self este instalado correctamente.");\n                }\n            }'''
 if old not in s:
     raise SystemExit('MKV placeholder anchor not found')
 s=s.replace(old,new,1)
