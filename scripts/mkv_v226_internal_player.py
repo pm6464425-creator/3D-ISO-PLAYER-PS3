@@ -39,5 +39,20 @@ s=s.replace('''show_ok("Movian no pudo iniciarse.\\n\\nRevisa que movian.self es
 s=s.replace('/* V2.25: locate an installed Movian/Showtime plain SELF.',
             '/* V2.26: locate bundled FLOW player first, then external Movian fallback.',1)
 
+# Hard validation: fail the generator rather than produce a package with the
+# wrong process-argv contract.
+required = [
+    'const char *launchargv[3];',
+    'launchargv[0]=player;',
+    'launchargv[1]=url.c_str();',
+    'launchargv[2]=NULL;',
+    '/dev_hdd0/game/3DISO0001/USRDIR/flow_player.self',
+]
+for marker in required:
+    if marker not in s:
+        raise SystemExit('V2.26 validation missing: ' + marker)
+if 'launchargv[0]=url.c_str();' in s:
+    raise SystemExit('V2.26 validation: old broken argv wiring still present')
+
 p.write_text(s)
 print('FLOW MOVIE V2.26: bundled internal MKV player + verified argv contract')
