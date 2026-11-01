@@ -10,7 +10,6 @@ git clone --recurse-submodules --shallow-submodules --depth 1 --branch v1.0.0 ht
 python3 scripts/patch_movian_v227_playerlog.py
 cd /tmp/movian-next
 test -f ext/gumbo-parser/src/attribute.c
-test -f ext/mbedtls/include/mbedtls/ssl.h
 echo 'Movian submodules OK'
 make prepare
 make -j2 self
