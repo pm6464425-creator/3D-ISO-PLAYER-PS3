@@ -1,1 +1,2 @@
 Trigger final V2.27 direct build with Movian submodules and FLOW_PLAYER.LOG.
+Registered workflow trigger 2.
