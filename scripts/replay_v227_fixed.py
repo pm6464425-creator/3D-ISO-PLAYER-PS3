@@ -5,7 +5,7 @@ import subprocess
 import sys
 
 ROOT = Path(__file__).resolve().parents[1]
-WORKFLOW = ROOT / ".github/workflows/build-v227.yml"
+WORKFLOW = ROOT / ".github/workflows/build-v227-fixed.yml"
 
 
 def extract_run_blocks(text: str):
@@ -65,7 +65,7 @@ def main():
 
     blocks = extract_run_blocks(WORKFLOW.read_text())
     if not blocks:
-        raise SystemExit("No run blocks found in V2.27 workflow")
+        raise SystemExit("No run blocks found in V2.27 fixed workflow")
 
     old_clone = "git clone --depth 1 --branch v1.0.0 https://github.com/Cruslan/PS3-Movian-Next.git /tmp/movian-next"
     new_clone = "git clone --recurse-submodules --shallow-submodules --depth 1 --branch v1.0.0 https://github.com/Cruslan/PS3-Movian-Next.git /tmp/movian-next"
@@ -77,9 +77,8 @@ def main():
     for n, block in enumerate(blocks, 1):
         if old_clone in block:
             block = block.replace(old_clone, new_clone)
-            # Defensive verification so the original gumbo-parser failure cannot silently return.
             block = block.replace(
-                "cd /tmp/movian-next\n          make prepare" if False else "cd /tmp/movian-next\nmake prepare",
+                "cd /tmp/movian-next\nmake prepare",
                 "cd /tmp/movian-next\n"
                 "test -f ext/gumbo-parser/src/attribute.c\n"
                 "echo 'Movian submodules ready: gumbo-parser present'\n"
