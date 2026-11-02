@@ -72,9 +72,11 @@ static void draw_background()
         if(pulse<72) pulse=72;
         if(pulse>242) pulse=242;
 
-        int r=1;
-        if((i%17)==0) r=3;
-        else if((i%5)==0) r=2;
+        /* Slightly larger than the previous build, without changing speed:
+           most particles are radius 2, some radius 3, with a few radius 4. */
+        int r=2;
+        if((i%17)==0) r=4;
+        else if((i%5)==0) r=3;
 
         u32 col=(i%6==0)?0xFF78D8FF:((i%3==0)?0xFF45B9E8:0xFF2A91CA);
         live_glow_point_fp(xfp,yfp,r,col,(unsigned int)pulse);
@@ -152,4 +154,4 @@ if 'FPS %.1f' in s or 'fps_tick();' in s:
     raise SystemExit('FPS overlay/counter removal failed')
 
 p.write_text(s)
-print('V2.26 smooth 60 Hz motion applied: subpixel particles/glints, moderate speed, FPS overlay removed')
+print('V2.26 smooth 60 Hz motion applied: slightly larger subpixel particles, moderate speed, FPS overlay removed')
