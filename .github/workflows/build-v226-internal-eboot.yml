@@ -8,6 +8,7 @@ on:
       - 'scripts/mkv_v226_internal_player.py'
       - 'scripts/hq_asset_jpg_v226.py'
       - 'scripts/live_motion_boost_v226.py'
+      - 'scripts/particle_size_xl_v226.py'
       - '.github/workflows/build-v226-internal-eboot.yml'
   workflow_dispatch:
 
@@ -24,13 +25,14 @@ jobs:
       - name: Construir y verificar V2.26 LIVE BG
         run: bash scripts/build_v226_internal_ci.sh
 
-      - name: Normalizar fondo HQ, movimiento 60 FPS y recompilar
+      - name: Normalizar fondo HQ, movimiento 60 FPS, particulas XL y recompilar
         run: |
           export PS3DEV="$GITHUB_WORKSPACE/ps3dev"
           export PSL1GHT="$GITHUB_WORKSPACE/ps3dev"
           export PATH="$GITHUB_WORKSPACE/ps3dev/bin:$GITHUB_WORKSPACE/ps3dev/ppu/bin:$GITHUB_WORKSPACE/ps3dev/spu/bin:$PATH"
           python3 scripts/hq_asset_jpg_v226.py
           python3 scripts/live_motion_boost_v226.py
+          python3 scripts/particle_size_xl_v226.py
           cp source/main.cpp generated_main_v226.cpp
           cp source/rsxutil.cpp generated_rsxutil_v226.cpp
           make clean
@@ -39,7 +41,8 @@ jobs:
           cp 3disoplayer.pkg FLOW_MOVIE_V2_26_INTERNAL_PLAYER.pkg
           cp 3disoplayer.gnpdrm.pkg FLOW_MOVIE_V2_26_INTERNAL_PLAYER_GNPDRM.pkg
           grep -q 'APPBG_HQ.JPG' generated_main_v226.cpp
-          grep -q 'draw_background' generated_main_v226.cpp
+          grep -q 'int r=3;' generated_main_v226.cpp
+          grep -q 'r=5;' generated_main_v226.cpp
           test -s pkgfiles/USRDIR/APPBG_HQ.JPG
 
       - name: Guardar V2.26 LIVE BG
