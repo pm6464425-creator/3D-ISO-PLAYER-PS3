@@ -1,8 +1,8 @@
-name: Compilar FLOW MOVIE V2.26 INTERNAL PLAYER EBOOT
+name: Compilar FLOW MOVIE V2.26 LIVE BG
 
 on:
   push:
-    branches: [ movie-v2-26 ]
+    branches: [ movie-v2-26-livebg ]
     paths:
       - 'scripts/build_v226_internal_ci.sh'
       - 'scripts/mkv_v226_internal_player.py'
@@ -19,13 +19,13 @@ jobs:
       - name: Obtener proyecto
         uses: actions/checkout@v4
 
-      - name: Construir y verificar V2.26
+      - name: Construir y verificar V2.26 LIVE BG
         run: bash scripts/build_v226_internal_ci.sh
 
-      - name: Guardar V2.26 INTERNAL PLAYER
+      - name: Guardar V2.26 LIVE BG
         uses: actions/upload-artifact@v4
         with:
-          name: FLOW-MOVIE-V2-26-INTERNAL-PLAYER-EBOOT
+          name: FLOW-MOVIE-V2-26-LIVE-BG
           path: |
             FLOW_MOVIE_V2_26_INTERNAL_PLAYER.pkg
             FLOW_MOVIE_V2_26_INTERNAL_PLAYER_GNPDRM.pkg
