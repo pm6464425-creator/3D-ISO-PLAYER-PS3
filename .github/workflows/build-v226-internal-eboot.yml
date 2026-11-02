@@ -12,6 +12,7 @@ on:
       - 'scripts/particle_xl_safe_render_v226.py'
       - 'scripts/particle_bigger_smoother_final_v226.py'
       - 'scripts/coverflow_smooth60_v226.py'
+      - 'scripts/coverflow_reference_motion_v226.py'
       - '.github/workflows/build-v226-internal-eboot.yml'
   workflow_dispatch:
 
@@ -28,7 +29,7 @@ jobs:
       - name: Construir y verificar V2.26 LIVE BG
         run: bash scripts/build_v226_internal_ci.sh
 
-      - name: Fondo HQ, particulas finales y coverflow 60 Hz
+      - name: Fondo HQ, particulas finales y coverflow referencia
         run: |
           export PS3DEV="$GITHUB_WORKSPACE/ps3dev"
           export PSL1GHT="$GITHUB_WORKSPACE/ps3dev"
@@ -39,6 +40,7 @@ jobs:
           python3 scripts/particle_xl_safe_render_v226.py
           python3 scripts/particle_bigger_smoother_final_v226.py
           python3 scripts/coverflow_smooth60_v226.py
+          python3 scripts/coverflow_reference_motion_v226.py
           cp source/main.cpp generated_main_v226.cpp
           cp source/rsxutil.cpp generated_rsxutil_v226.cpp
           make clean
@@ -48,11 +50,13 @@ jobs:
           cp 3disoplayer.gnpdrm.pkg FLOW_MOVIE_V2_26_INTERNAL_PLAYER_GNPDRM.pkg
           grep -q 'APPBG_HQ.JPG' generated_main_v226.cpp
           grep -q 'V226_BIGGER_SMOOTHER_FINAL' generated_main_v226.cpp
-          grep -q 'V2.26 COVERFLOW_SMOOTH60' generated_main_v226.cpp
+          grep -q 'V2.26 COVERFLOW_REFERENCE_MOTION' generated_main_v226.cpp
           grep -q '#define COVER_CACHE_SLOTS 10' generated_main_v226.cpp
           grep -q 'cover_prefetch_idle();' generated_main_v226.cpp
           grep -q 'allow_cover_load' generated_main_v226.cpp
-          grep -q 'const float max_speed=1.40f' generated_main_v226.cpp
+          grep -q 'const float spring_k=250.0f' generated_main_v226.cpp
+          grep -q 'const float damping=26.0f' generated_main_v226.cpp
+          grep -q 'const float max_speed=7.25f' generated_main_v226.cpp
           ! grep -q 'FPS %.1f' generated_main_v226.cpp
           test -s pkgfiles/USRDIR/APPBG_HQ.JPG
 
