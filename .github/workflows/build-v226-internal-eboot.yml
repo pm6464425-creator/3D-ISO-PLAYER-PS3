@@ -13,6 +13,7 @@ on:
       - 'scripts/particle_bigger_smoother_final_v226.py'
       - 'scripts/coverflow_smooth60_v226.py'
       - 'scripts/coverflow_reference_motion_v226.py'
+      - 'scripts/cover_cache_idle_v226.py'
       - '.github/workflows/build-v226-internal-eboot.yml'
   workflow_dispatch:
 
@@ -29,7 +30,7 @@ jobs:
       - name: Construir y verificar V2.26 LIVE BG
         run: bash scripts/build_v226_internal_ci.sh
 
-      - name: Fondo HQ, particulas finales y coverflow referencia
+      - name: Fondo HQ, particulas finales, coverflow referencia y cache de portadas
         run: |
           export PS3DEV="$GITHUB_WORKSPACE/ps3dev"
           export PSL1GHT="$GITHUB_WORKSPACE/ps3dev"
@@ -41,6 +42,7 @@ jobs:
           python3 scripts/particle_bigger_smoother_final_v226.py
           python3 scripts/coverflow_smooth60_v226.py
           python3 scripts/coverflow_reference_motion_v226.py
+          python3 scripts/cover_cache_idle_v226.py
           cp source/main.cpp generated_main_v226.cpp
           cp source/rsxutil.cpp generated_rsxutil_v226.cpp
           make clean
@@ -51,9 +53,11 @@ jobs:
           grep -q 'APPBG_HQ.JPG' generated_main_v226.cpp
           grep -q 'V226_BIGGER_SMOOTHER_FINAL' generated_main_v226.cpp
           grep -q 'V2.26 COVERFLOW_REFERENCE_MOTION' generated_main_v226.cpp
-          grep -q '#define COVER_CACHE_SLOTS 10' generated_main_v226.cpp
+          grep -q '#define COVER_CACHE_SLOTS 16' generated_main_v226.cpp
           grep -q 'cover_prefetch_idle();' generated_main_v226.cpp
-          grep -q 'allow_cover_load' generated_main_v226.cpp
+          grep -q 'ensure_movie_cover_path' generated_main_v226.cpp
+          grep -q 'CoverBitmap \*c=find_cached_cover(m);' generated_main_v226.cpp
+          grep -q 'Cover paths are resolved lazily while the coverflow is idle.' generated_main_v226.cpp
           grep -q 'const float spring_k=250.0f' generated_main_v226.cpp
           grep -q 'const float damping=26.0f' generated_main_v226.cpp
           grep -q 'const float max_speed=7.25f' generated_main_v226.cpp
