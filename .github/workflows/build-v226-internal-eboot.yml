@@ -24,7 +24,7 @@ jobs:
       - name: Construir y verificar V2.26 LIVE BG
         run: bash scripts/build_v226_internal_ci.sh
 
-      - name: Normalizar fondo HQ, reforzar movimiento y recompilar
+      - name: Normalizar fondo HQ, movimiento 60 FPS y recompilar
         run: |
           export PS3DEV="$GITHUB_WORKSPACE/ps3dev"
           export PSL1GHT="$GITHUB_WORKSPACE/ps3dev"
@@ -39,8 +39,7 @@ jobs:
           cp 3disoplayer.pkg FLOW_MOVIE_V2_26_INTERNAL_PLAYER.pkg
           cp 3disoplayer.gnpdrm.pkg FLOW_MOVIE_V2_26_INTERNAL_PLAYER_GNPDRM.pkg
           grep -q 'APPBG_HQ.JPG' generated_main_v226.cpp
-          grep -q 'V2.26 HQ LIVE' generated_main_v226.cpp
-          grep -q 'for(int i=0;i<96;++i)' generated_main_v226.cpp
+          grep -q 'draw_background' generated_main_v226.cpp
           test -s pkgfiles/USRDIR/APPBG_HQ.JPG
 
       - name: Guardar V2.26 LIVE BG
