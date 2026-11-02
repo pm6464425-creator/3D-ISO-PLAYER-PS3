@@ -9,6 +9,7 @@ on:
       - 'scripts/hq_asset_jpg_v226.py'
       - 'scripts/live_motion_boost_v226.py'
       - 'scripts/particle_size_xl_v226.py'
+      - 'scripts/particle_xl_safe_render_v226.py'
       - '.github/workflows/build-v226-internal-eboot.yml'
   workflow_dispatch:
 
@@ -25,7 +26,7 @@ jobs:
       - name: Construir y verificar V2.26 LIVE BG
         run: bash scripts/build_v226_internal_ci.sh
 
-      - name: Normalizar fondo HQ, movimiento 60 FPS, particulas XL y recompilar
+      - name: Normalizar fondo HQ, movimiento 60 FPS, particulas XL seguras y recompilar
         run: |
           export PS3DEV="$GITHUB_WORKSPACE/ps3dev"
           export PSL1GHT="$GITHUB_WORKSPACE/ps3dev"
@@ -33,6 +34,7 @@ jobs:
           python3 scripts/hq_asset_jpg_v226.py
           python3 scripts/live_motion_boost_v226.py
           python3 scripts/particle_size_xl_v226.py
+          python3 scripts/particle_xl_safe_render_v226.py
           cp source/main.cpp generated_main_v226.cpp
           cp source/rsxutil.cpp generated_rsxutil_v226.cpp
           make clean
@@ -43,6 +45,7 @@ jobs:
           grep -q 'APPBG_HQ.JPG' generated_main_v226.cpp
           grep -q 'int r=3;' generated_main_v226.cpp
           grep -q 'r=5;' generated_main_v226.cpp
+          grep -q 'V226_XL_SAFE_RENDER' generated_main_v226.cpp
           test -s pkgfiles/USRDIR/APPBG_HQ.JPG
 
       - name: Guardar V2.26 LIVE BG
