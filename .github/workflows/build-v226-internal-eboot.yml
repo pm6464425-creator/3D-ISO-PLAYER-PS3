@@ -10,6 +10,7 @@ on:
       - 'scripts/live_motion_boost_v226.py'
       - 'scripts/particle_size_xl_v226.py'
       - 'scripts/particle_xl_safe_render_v226.py'
+      - 'scripts/particle_bigger_smoother_final_v226.py'
       - '.github/workflows/build-v226-internal-eboot.yml'
   workflow_dispatch:
 
@@ -26,7 +27,7 @@ jobs:
       - name: Construir y verificar V2.26 LIVE BG
         run: bash scripts/build_v226_internal_ci.sh
 
-      - name: Normalizar fondo HQ, movimiento 60 FPS, particulas XL seguras y recompilar
+      - name: Fondo HQ y particulas BIGGER SMOOTHER FINAL
         run: |
           export PS3DEV="$GITHUB_WORKSPACE/ps3dev"
           export PSL1GHT="$GITHUB_WORKSPACE/ps3dev"
@@ -35,6 +36,7 @@ jobs:
           python3 scripts/live_motion_boost_v226.py
           python3 scripts/particle_size_xl_v226.py
           python3 scripts/particle_xl_safe_render_v226.py
+          python3 scripts/particle_bigger_smoother_final_v226.py
           cp source/main.cpp generated_main_v226.cpp
           cp source/rsxutil.cpp generated_rsxutil_v226.cpp
           make clean
@@ -43,9 +45,11 @@ jobs:
           cp 3disoplayer.pkg FLOW_MOVIE_V2_26_INTERNAL_PLAYER.pkg
           cp 3disoplayer.gnpdrm.pkg FLOW_MOVIE_V2_26_INTERNAL_PLAYER_GNPDRM.pkg
           grep -q 'APPBG_HQ.JPG' generated_main_v226.cpp
-          grep -q 'int r=3;' generated_main_v226.cpp
-          grep -q 'r=5;' generated_main_v226.cpp
-          grep -q 'V226_XL_SAFE_RENDER' generated_main_v226.cpp
+          grep -q 'V226_BIGGER_SMOOTHER_FINAL' generated_main_v226.cpp
+          grep -q 'for(int i=0;i<60;++i)' generated_main_v226.cpp
+          grep -q 'int radius=(i<40)?6:((i<55)?7:8);' generated_main_v226.cpp
+          grep -q 'live_soft_particle_fp' generated_main_v226.cpp
+          ! grep -q 'FPS %.1f' generated_main_v226.cpp
           test -s pkgfiles/USRDIR/APPBG_HQ.JPG
 
       - name: Guardar V2.26 LIVE BG
