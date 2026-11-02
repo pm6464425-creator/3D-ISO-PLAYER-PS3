@@ -14,6 +14,7 @@ on:
       - 'scripts/coverflow_smooth60_v226.py'
       - 'scripts/coverflow_reference_motion_v226.py'
       - 'scripts/cover_cache_idle_v226.py'
+      - 'scripts/runtime_microstutter_v226.py'
       - '.github/workflows/build-v226-internal-eboot.yml'
   workflow_dispatch:
 
@@ -30,7 +31,7 @@ jobs:
       - name: Construir y verificar V2.26 LIVE BG
         run: bash scripts/build_v226_internal_ci.sh
 
-      - name: Fondo HQ, particulas finales, coverflow referencia y cache de portadas
+      - name: Fondo HQ, particulas finales, coverflow referencia y microstutter
         run: |
           export PS3DEV="$GITHUB_WORKSPACE/ps3dev"
           export PSL1GHT="$GITHUB_WORKSPACE/ps3dev"
@@ -43,6 +44,7 @@ jobs:
           python3 scripts/coverflow_smooth60_v226.py
           python3 scripts/coverflow_reference_motion_v226.py
           python3 scripts/cover_cache_idle_v226.py
+          python3 scripts/runtime_microstutter_v226.py
           cp source/main.cpp generated_main_v226.cpp
           cp source/rsxutil.cpp generated_rsxutil_v226.cpp
           make clean
@@ -58,6 +60,13 @@ jobs:
           grep -q 'ensure_movie_cover_path' generated_main_v226.cpp
           grep -q 'CoverBitmap \*c=find_cached_cover(m);' generated_main_v226.cpp
           grep -q 'Cover paths are resolved lazily while the coverflow is idle.' generated_main_v226.cpp
+          grep -q 'V2.26 MICROSTUTTER: keep the timing heartbeat in RAM only.' generated_main_v226.cpp
+          grep -q 'static bool refresh_usb_state_slice(int usb)' generated_main_v226.cpp
+          grep -q 'if(++poll_counter>=15)' generated_main_v226.cpp
+          grep -q 'poll_usb=(poll_usb+1)&7;' generated_main_v226.cpp
+          grep -q 'Lightweight prepared covers (e.g. 320x380) are already render-ready.' generated_main_v226.cpp
+          ! grep -q 'flow_log("RENDER_BEGIN",NULL)' generated_main_v226.cpp
+          ! grep -q 'flow_log("RENDER_END",NULL)' generated_main_v226.cpp
           grep -q 'const float spring_k=250.0f' generated_main_v226.cpp
           grep -q 'const float damping=26.0f' generated_main_v226.cpp
           grep -q 'const float max_speed=7.25f' generated_main_v226.cpp
