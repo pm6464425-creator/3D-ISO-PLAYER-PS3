@@ -8,16 +8,17 @@ s = p.read_text()
 # 1) Integrate the spring using real elapsed time, subdivided into <= 1/60 s
 #    steps. A 30 Hz frame therefore advances about two simulation steps instead
 #    of making the coverflow run at half speed.
-# 2) If the previous real frame was already slow, reduce only peripheral REAL
-#    cover transfers while moving. Case geometry remains visible and all covers
-#    return at full quality as soon as motion settles.
+# 2) If a real frame has already dropped to ~30 Hz, temporarily reduce only the
+#    tiny peripheral REAL-cover transfers while moving. A short hysteresis hold
+#    prevents 60/30/60/30 quality oscillation. Full artwork returns at rest.
 
 if 'V2.26 REALTIME MOTION PERF' not in s:
-    # Frame time exported by flow_update for adaptive moving-cover LOD.
     anchor = 'static bool g_flow_ready = false;\n'
     if anchor not in s:
         raise SystemExit('flow globals anchor not found')
-    s = s.replace(anchor, anchor + 'static float g_flow_frame_dt = 1.0f/60.0f;\n', 1)
+    s = s.replace(anchor,
+                  anchor + 'static float g_flow_frame_dt = 1.0f/60.0f;\n'
+                           'static int g_cover_lod_hold = 0;\n', 1)
 
     new_flow = r'''static void flow_update()
 {
@@ -88,21 +89,27 @@ if 'V2.26 REALTIME MOTION PERF' not in s:
         raise SystemExit('flow_update block not found')
     s = s[:m.start()] + new_flow + '\nstatic void cover_cache_clear' + s[m.end():]
 
-    # Adaptive LOD only affects real artwork transfers during motion. At normal
-    # 60 Hz all five visible covers are still sent. If we have already fallen
-    # to ~30 Hz, keep the central/adjacent art and skip only the tiny far pair.
     old = '''            for(int i=0;i<nitems;i++) {\n                bool active=fabsf(items[i].d)<0.34f;\n                draw_poster(items[i].x,items[i].y,items[i].w,items[i].h,g_movies[items[i].idx],active,false,1);\n            }\n'''
-    new = '''            const bool cover_lod=(g_flow_frame_dt>0.024f);\n            for(int i=0;i<nitems;i++) {\n                if(cover_lod && fabsf(items[i].d)>1.35f) continue;\n                bool active=fabsf(items[i].d)<0.34f;\n                draw_poster(items[i].x,items[i].y,items[i].w,items[i].h,g_movies[items[i].idx],active,false,1);\n            }\n'''
+    new = '''            if(g_flow_frame_dt>0.024f) g_cover_lod_hold=12;\n            else if(g_cover_lod_hold>0) --g_cover_lod_hold;\n            const bool cover_lod=(g_cover_lod_hold>0);\n            for(int i=0;i<nitems;i++) {\n                if(cover_lod && fabsf(items[i].d)>1.35f) continue;\n                bool active=fabsf(items[i].d)<0.34f;\n                draw_poster(items[i].x,items[i].y,items[i].w,items[i].h,g_movies[items[i].idx],active,false,1);\n            }\n'''
     if old not in s:
         raise SystemExit('moving RSX cover loop anchor not found')
     s = s.replace(old,new,1)
 
+    # Reset reduced-detail state whenever the coverflow has actually settled.
+    old_rest = '''        if(!flow_animating) {\n            /* At rest we keep the exact high-quality case overlay. A fence here\n'''
+    new_rest = '''        if(!flow_animating) {\n            g_cover_lod_hold=0;\n            /* At rest we keep the exact high-quality case overlay. A fence here\n'''
+    if old_rest not in s:
+        raise SystemExit('rest block anchor not found')
+    s = s.replace(old_rest,new_rest,1)
+
 markers = [
     'V2.26 REALTIME MOTION PERF',
     'static float g_flow_frame_dt = 1.0f/60.0f;',
+    'static int g_cover_lod_hold = 0;',
     'gettimeofday(&tv,NULL);',
     'while(remaining>0.00001f && substeps<4)',
-    'const bool cover_lod=(g_flow_frame_dt>0.024f);',
+    'if(g_flow_frame_dt>0.024f) g_cover_lod_hold=12;',
+    'const bool cover_lod=(g_cover_lod_hold>0);',
     'fabsf(items[i].d)>1.35f',
     'const float spring_k=250.0f',
     'const float damping=26.0f',
@@ -116,4 +123,4 @@ if 'const float dt=1.0f/60.0f;' in s[s.find('static void flow_update()'):s.find(
     raise SystemExit('fixed 60 Hz dt remained in flow_update')
 
 p.write_text(s)
-print('V2.26 realtime motion applied: wall-clock spring + adaptive peripheral cover LOD')
+print('V2.26 realtime motion applied: wall-clock spring + hysteretic peripheral cover LOD')
