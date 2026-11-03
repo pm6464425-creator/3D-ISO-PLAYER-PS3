@@ -29,6 +29,9 @@ jobs:
       - name: Obtener proyecto
         uses: actions/checkout@v4
 
+      - name: Preparar biblioteca grande antes de V2.26
+        run: python3 scripts/large_library_v226.py
+
       - name: Construir y verificar V2.26 LIVE BG
         run: bash scripts/build_v226_internal_ci.sh
 
@@ -46,7 +49,6 @@ jobs:
           python3 scripts/coverflow_reference_motion_v226.py
           python3 scripts/cover_cache_idle_v226.py
           python3 scripts/runtime_microstutter_v226.py
-          python3 scripts/large_library_v226.py
           cp source/main.cpp generated_main_v226.cpp
           cp source/rsxutil.cpp generated_rsxutil_v226.cpp
           make clean
