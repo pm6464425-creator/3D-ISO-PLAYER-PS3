@@ -49,6 +49,7 @@ jobs:
           python3 scripts/coverflow_reference_motion_v226.py
           python3 scripts/cover_cache_idle_v226.py
           python3 scripts/runtime_microstutter_v226.py
+          python3 scripts/large_library_v226.py
           cp source/main.cpp generated_main_v226.cpp
           cp source/rsxutil.cpp generated_rsxutil_v226.cpp
           make clean
