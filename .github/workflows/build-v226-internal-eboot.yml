@@ -20,6 +20,7 @@ on:
       - 'scripts/gpu_cover_motion_nofence_v226.py'
       - 'scripts/realtime_motion_perf_v226.py'
       - 'scripts/persistent_case_motion_v226.py'
+      - 'scripts/system_menu_pause_v226.py'
       - '.github/workflows/build-v226-internal-eboot.yml'
   workflow_dispatch:
 
@@ -39,7 +40,7 @@ jobs:
       - name: Construir y verificar V2.26 LIVE BG
         run: bash scripts/build_v226_internal_ci.sh
 
-      - name: Fondo HQ, coverflow GPU, tiempo real y marco persistente
+      - name: Fondo HQ, coverflow GPU, tiempo real, marco persistente y menu PS fluido
         run: |
           export PS3DEV="$GITHUB_WORKSPACE/ps3dev"
           export PSL1GHT="$GITHUB_WORKSPACE/ps3dev"
@@ -58,6 +59,7 @@ jobs:
           python3 scripts/gpu_cover_motion_nofence_v226.py
           python3 scripts/realtime_motion_perf_v226.py
           python3 scripts/persistent_case_motion_v226.py
+          python3 scripts/system_menu_pause_v226.py
           cp source/main.cpp generated_main_v226.cpp
           cp source/rsxutil.cpp generated_rsxutil_v226.cpp
           make clean
@@ -75,6 +77,11 @@ jobs:
           grep -q 'V2.26 MOTION NO-FENCE' generated_main_v226.cpp
           grep -q 'V2.26 REALTIME MOTION PERF' generated_main_v226.cpp
           grep -q 'V2.26 PERSISTENT CASE DURING MOTION' generated_main_v226.cpp
+          grep -q 'V2.26 SYSTEM MENU PAUSE' generated_main_v226.cpp
+          grep -q 'case SYSUTIL_MENU_OPEN:' generated_main_v226.cpp
+          grep -q 'case SYSUTIL_MENU_CLOSE:' generated_main_v226.cpp
+          grep -q 'if(g_system_menu_open)' generated_main_v226.cpp
+          grep -q 'usleep(8000);' generated_main_v226.cpp
           grep -q 'gettimeofday(&tv,NULL);' generated_main_v226.cpp
           grep -q 'while(remaining>0.00001f && substeps<4)' generated_main_v226.cpp
           grep -q 'if(g_flow_frame_dt>0.024f) g_cover_lod_hold=12;' generated_main_v226.cpp
@@ -83,10 +90,10 @@ jobs:
           ! sed -n '/static void flow_update()/,/static void cover_cache_clear/p' generated_main_v226.cpp | grep -q 'const float dt=1.0f/60.0f;'
           test -s pkgfiles/USRDIR/APPBG_HQ.JPG
 
-      - name: Guardar V2.26 REALTIME FRAME
+      - name: Guardar V2.26 SYSTEM MENU FIX
         uses: actions/upload-artifact@v4
         with:
-          name: FLOW-MOVIE-V2-26-REALTIME-FRAME
+          name: FLOW-MOVIE-V2-26-SYSTEM-MENU-FIX
           path: |
             FLOW_MOVIE_V2_26_INTERNAL_PLAYER.pkg
             FLOW_MOVIE_V2_26_INTERNAL_PLAYER_GNPDRM.pkg
