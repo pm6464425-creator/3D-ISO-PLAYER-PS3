@@ -74,7 +74,8 @@ jobs:
           grep -q 'V2.26 REALTIME MOTION PERF' generated_main_v226.cpp
           grep -q 'gettimeofday(&tv,NULL);' generated_main_v226.cpp
           grep -q 'while(remaining>0.00001f && substeps<4)' generated_main_v226.cpp
-          grep -q 'const bool cover_lod=(g_flow_frame_dt>0.024f);' generated_main_v226.cpp
+          grep -q 'if(g_flow_frame_dt>0.024f) g_cover_lod_hold=12;' generated_main_v226.cpp
+          grep -q 'const bool cover_lod=(g_cover_lod_hold>0);' generated_main_v226.cpp
           ! sed -n '/static void flow_update()/,/static void cover_cache_clear/p' generated_main_v226.cpp | grep -q 'const float dt=1.0f/60.0f;'
           test -s pkgfiles/USRDIR/APPBG_HQ.JPG
 
