@@ -18,6 +18,7 @@ on:
       - 'scripts/large_library_v226.py'
       - 'scripts/gpu_cover_v226.py'
       - 'scripts/gpu_cover_motion_nofence_v226.py'
+      - 'scripts/realtime_motion_perf_v226.py'
       - '.github/workflows/build-v226-internal-eboot.yml'
   workflow_dispatch:
 
@@ -37,7 +38,7 @@ jobs:
       - name: Construir y verificar V2.26 LIVE BG
         run: bash scripts/build_v226_internal_ci.sh
 
-      - name: Fondo HQ, coverflow y caratulas RSX sin fence en movimiento
+      - name: Fondo HQ, coverflow GPU y movimiento por tiempo real
         run: |
           export PS3DEV="$GITHUB_WORKSPACE/ps3dev"
           export PSL1GHT="$GITHUB_WORKSPACE/ps3dev"
@@ -54,6 +55,7 @@ jobs:
           python3 scripts/large_library_v226.py
           python3 scripts/gpu_cover_v226.py
           python3 scripts/gpu_cover_motion_nofence_v226.py
+          python3 scripts/realtime_motion_perf_v226.py
           cp source/main.cpp generated_main_v226.cpp
           cp source/rsxutil.cpp generated_rsxutil_v226.cpp
           make clean
@@ -63,29 +65,23 @@ jobs:
           cp 3disoplayer.gnpdrm.pkg FLOW_MOVIE_V2_26_INTERNAL_PLAYER_GNPDRM.pkg
           grep -q 'APPBG_HQ.JPG' generated_main_v226.cpp
           grep -q 'V226_BIGGER_SMOOTHER_FINAL' generated_main_v226.cpp
-          grep -q 'V2.26 COVERFLOW_REFERENCE_MOTION' generated_main_v226.cpp
           grep -q '#define COVER_CACHE_SLOTS 16' generated_main_v226.cpp
-          grep -q 'cover_prefetch_idle();' generated_main_v226.cpp
-          grep -q 'ensure_movie_cover_path' generated_main_v226.cpp
-          grep -q 'CoverBitmap \*c=find_cached_cover(m);' generated_main_v226.cpp
-          grep -q 'V2.26 MICROSTUTTER: keep the timing heartbeat in RAM only.' generated_main_v226.cpp
-          grep -q 'Lightweight prepared covers (e.g. 320x380) are already render-ready.' generated_main_v226.cpp
-          grep -q 'const float spring_k=250.0f' generated_main_v226.cpp
-          grep -q 'const float damping=26.0f' generated_main_v226.cpp
-          grep -q 'const float max_speed=7.25f' generated_main_v226.cpp
           grep -q '#define MAX_LIBRARY_ITEMS 1024' generated_main_v226.cpp
           grep -q 'fresh.reserve(MAX_LIBRARY_ITEMS);' generated_main_v226.cpp
           grep -q 'gpu_ready=rsx_cover_upload(slot,argb,(u32)cw,(u32)ch);' generated_main_v226.cpp
           grep -q 'V2.26 GPU COVER: persistent poster surfaces in RSX local memory.' generated_rsxutil_v226.cpp
           grep -q 'V2.26 MOTION NO-FENCE' generated_main_v226.cpp
-          grep -q 'if(flow_animating)' generated_main_v226.cpp
-          grep -q 'Do NOT call' generated_main_v226.cpp
+          grep -q 'V2.26 REALTIME MOTION PERF' generated_main_v226.cpp
+          grep -q 'gettimeofday(&tv,NULL);' generated_main_v226.cpp
+          grep -q 'while(remaining>0.00001f && substeps<4)' generated_main_v226.cpp
+          grep -q 'const bool cover_lod=(g_flow_frame_dt>0.024f);' generated_main_v226.cpp
+          ! sed -n '/static void flow_update()/,/static void cover_cache_clear/p' generated_main_v226.cpp | grep -q 'const float dt=1.0f/60.0f;'
           test -s pkgfiles/USRDIR/APPBG_HQ.JPG
 
-      - name: Guardar V2.26 LIVE BG
+      - name: Guardar V2.26 REALTIME
         uses: actions/upload-artifact@v4
         with:
-          name: FLOW-MOVIE-V2-26-GPU-NOFENCE
+          name: FLOW-MOVIE-V2-26-REALTIME
           path: |
             FLOW_MOVIE_V2_26_INTERNAL_PLAYER.pkg
             FLOW_MOVIE_V2_26_INTERNAL_PLAYER_GNPDRM.pkg
