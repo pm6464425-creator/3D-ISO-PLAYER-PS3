@@ -15,6 +15,7 @@ on:
       - 'scripts/coverflow_reference_motion_v226.py'
       - 'scripts/cover_cache_idle_v226.py'
       - 'scripts/runtime_microstutter_v226.py'
+      - 'scripts/large_library_v226.py'
       - '.github/workflows/build-v226-internal-eboot.yml'
   workflow_dispatch:
 
@@ -31,7 +32,7 @@ jobs:
       - name: Construir y verificar V2.26 LIVE BG
         run: bash scripts/build_v226_internal_ci.sh
 
-      - name: Fondo HQ, particulas finales, coverflow referencia y microstutter
+      - name: Fondo HQ, particulas finales, coverflow referencia y biblioteca grande
         run: |
           export PS3DEV="$GITHUB_WORKSPACE/ps3dev"
           export PSL1GHT="$GITHUB_WORKSPACE/ps3dev"
@@ -45,6 +46,7 @@ jobs:
           python3 scripts/coverflow_reference_motion_v226.py
           python3 scripts/cover_cache_idle_v226.py
           python3 scripts/runtime_microstutter_v226.py
+          python3 scripts/large_library_v226.py
           cp source/main.cpp generated_main_v226.cpp
           cp source/rsxutil.cpp generated_rsxutil_v226.cpp
           make clean
@@ -71,6 +73,12 @@ jobs:
           grep -q 'const float damping=26.0f' generated_main_v226.cpp
           grep -q 'const float max_speed=7.25f' generated_main_v226.cpp
           ! grep -q 'FPS %.1f' generated_main_v226.cpp
+          grep -q '#define MAX_LIBRARY_ITEMS 1024' generated_main_v226.cpp
+          grep -q 'fresh.reserve(MAX_LIBRARY_ITEMS);' generated_main_v226.cpp
+          grep -q 'fresh.size() >= MAX_LIBRARY_ITEMS' generated_main_v226.cpp
+          grep -q 'FlowDrawItem items\[11\];' generated_main_v226.cpp
+          grep -q 'for(int idx=base-5;idx<=base+5;idx++)' generated_main_v226.cpp
+          grep -q 'static const int off\[13\]={0,1,-1,2,-2,3,-3,4,-4,5,-5,6,-6};' generated_main_v226.cpp
           test -s pkgfiles/USRDIR/APPBG_HQ.JPG
 
       - name: Guardar V2.26 LIVE BG
