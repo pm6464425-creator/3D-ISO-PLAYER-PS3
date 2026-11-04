@@ -1,4 +1,4 @@
-name: Sign compiled FLOW M7 argvfix EBOOT without PKG generator
+name: Sign bootable FLOW M7 argvfix EBOOT using PSL1GHT standard ELF pipeline
 on:
   push:
     branches: [movie-v2-26-livebg]
@@ -32,20 +32,36 @@ jobs:
           tar xzf /tmp/ps3dev.tar.gz -C "$GITHUB_WORKSPACE"
           export PS3DEV="$GITHUB_WORKSPACE/ps3dev"
           export PATH="$PS3DEV/bin:$PS3DEV/ppu/bin:$PATH"
-          make_self_npdrm 3disoplayer.elf EBOOT.BIN UP0001-3DISO0001_00-0000000000000000
+          # Exactly PSL1GHT/ppu_rules build procedure for a bootable EBOOT.
+          # CEX self generation strips the linked ELF and runs sprxlinker
+          # before the NPDRM signer. Skipping these steps produced an ELF
+          # with wrong OSABI 0x00 and the PS3 returned to the XMB.
+          mkdir -p build
+          ppu-strip 3disoplayer.elf -o build/3disoplayer.elf
+          sprxlinker build/3disoplayer.elf
+          python3 - <<'PY'
+          from pathlib import Path
+          import hashlib,struct
+          b=Path('build/3disoplayer.elf').read_bytes()
+          print('PREPARED ELF',len(b),b[:64].hex(),hashlib.sha256(b).hexdigest())
+          assert b[:8]==bytes.fromhex('7f454c4602020166')
+          assert 1100000<len(b)<1500000
+          PY
+          make_self_npdrm build/3disoplayer.elf EBOOT.BIN UP0001-3DISO0001_00-0000000000000000
           test -s EBOOT.BIN
           python3 - <<'PY'
           from pathlib import Path
           import struct,hashlib
           b=Path('EBOOT.BIN').read_bytes()
           print('NPDRM EBOOT',len(b),b[:64].hex(),hashlib.sha256(b).hexdigest())
-          assert b[:4]==bytes.fromhex('53434500') and 400000<len(b)<800000
+          assert b[:4]==bytes.fromhex('53434500') and 490000<len(b)<600000
+          assert b[0x90:0x98]==bytes.fromhex('7f454c4602020166'), 'Unprepared ELF: PS3 process would exit to XMB'
           assert b[0xA:0xC]==bytes.fromhex('0001')
           assert b.count(b'UP0001-3DISO0001_00-0000000000000000')>0
           PY
       - uses: actions/upload-artifact@v4
         with:
-          name: FLOW-M7-ARGFIX-NPDRM-EBOOT-VERIFIED
+          name: FLOW-M7-ARGFIX-BOOTABLE-EBOOT
           path: |
             EBOOT.BIN
             generated_main_v226.cpp
