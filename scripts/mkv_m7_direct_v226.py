@@ -14,7 +14,7 @@ mkv=r'''/* FLOW V2.26 EMBEDDED MOVIAN M7 NTFS DIRECT EXPERIMENT
    Bundled official Movian M7 7.0.273 movian.self. ONE PKG, no other titles.
    FLOW lists files with PS3 libntfs, then passes the original USB URI
    directly to the embedded media engine. Never copy an MKV to internal HDD.
-   Uses both standard PS3 argv handoff and legacy SHOWTIME.TXT compatibility.
+   Uses patched M7 PS3 argv URL startup, never legacy SHOWTIME.TXT.
    IMPORTANT: This cannot certify target Movie playback without PS3 hardware. */
 #define MKV_ERR_MOVIAN_NOT_FOUND (-25001)
 #define MKV_ERR_SPAWN_RETURNED   (-25002)
@@ -46,20 +46,6 @@ static std::string m7_direct_media_url(const Movie &movie)
     if(pos!=std::string::npos && url.compare(pos,3,"://")!=0)
         url.replace(pos,2,"://");
     return url;
-}
-
-/* Compatibility handoff for specially-patched standalone Showtime editions:
-   bundled Movian M7 may ignore this; the argv URL is provided as well. */
-static bool m7_stage_url_file(const std::string &url)
-{
-    const char *temp="/dev_hdd0/game/3DISO0001/USRDIR/TEMP";
-    mkdir(temp,0777);
-    const std::string filename=std::string(temp)+"/SHOWTIME.TXT";
-    FILE *fp=fopen(filename.c_str(),"wb");
-    if(!fp) return false;
-    bool ok=(fwrite(url.data(),1,url.size(),fp)==url.size());
-    if(fclose(fp)!=0) ok=false;
-    return ok;
 }
 
 static int launch_mkv_in_movian(const Movie &movie)
@@ -95,11 +81,6 @@ static int launch_mkv_in_movian(const Movie &movie)
         return MKV_ERR_PREPARE_FAILED;
     }
 
-    if(!m7_stage_url_file(url)) {
-        flow_log("M7_SHOWTIME_TXT_ERROR","Cannot write fallback launch URL");
-        return MKV_ERR_PREPARE_FAILED;
-    }
-
     char detail[1200];
     snprintf(detail,sizeof(detail),"embedded=%s direct_uri=%s",player,url.c_str());
     flow_log("M7_DIRECT_NTFS_START",detail);
@@ -107,7 +88,7 @@ static int launch_mkv_in_movian(const Movie &movie)
     /* PS3 syscall invocation, without new startup imports (getcwd/chdir
        previously caused a black-screen regression).
        argv[0] must remain a valid SELF path for PS3's Movian init.
-       The selected file URI is passed in argv[1], for M7 versions
+       The selected file URI is passed in argv[1], for patched M7 versions
        that accept a startup URL. */
     const char *args[]={player,url.c_str(),NULL};
     sysProcessExitSpawn2(player,args,NULL,NULL,0,1200,
