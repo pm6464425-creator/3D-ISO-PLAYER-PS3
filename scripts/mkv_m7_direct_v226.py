@@ -109,7 +109,7 @@ static int launch_mkv_in_movian(const Movie &movie)
        argv[0] must remain a valid SELF path for PS3's Movian init.
        The selected file URI is passed in argv[1], for M7 versions
        that accept a startup URL. */
-    const char *const args[]={player,url.c_str(),NULL};
+    const char *args[]={player,url.c_str(),NULL};
     sysProcessExitSpawn2(player,args,NULL,NULL,0,1200,
                          SYS_PROCESS_SPAWN_STACK_SIZE_1M);
 
