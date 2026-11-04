@@ -27,3 +27,26 @@ jobs:
                   kind=f'SCE appType={int.from_bytes(b[0x7c:0x80],"big")} magic={b[:16].hex()}'
               print('FILE',p.name,'size',len(b),kind)
           PY
+
+      - name: Inspect multiMAN launchable SHOWTIME SELF from Brewology
+        continue-on-error: true
+        run: |
+          set -euxo pipefail
+          curl --max-time 45 --retry 2 -fLA 'Mozilla/5.0' 'https://store.brewology.com/get/homebrew.php?fid=2385&id=99' -o /tmp/showtime.self
+          ls -lh /tmp/showtime.self
+          sha256sum /tmp/showtime.self
+          head -c 64 /tmp/showtime.self | od -An -tx1
+          python3 - <<'PY'
+          from pathlib import Path
+          import struct
+          b=Path('/tmp/showtime.self').read_bytes()
+          print('binary length',len(b),'magic',repr(b[:8]))
+          if b[:4] == b'SCE\\0':
+              print('SELF application program type',struct.unpack_from('>I',b,0x7c)[0])
+          PY
+      - name: Upload verified SHOWTIME SELF
+        if: ${{ hashFiles('/tmp/showtime.self') != '' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: SHOWTIME-SELF-FOR-FLOW-DEBUG
+          path: /tmp/showtime.self
