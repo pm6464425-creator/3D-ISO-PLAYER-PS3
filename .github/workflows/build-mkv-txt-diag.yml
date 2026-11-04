@@ -1,0 +1,97 @@
+name: FLOW V226 MKV TXT DIAG EBOOT
+on:
+  push:
+    branches: [movie-v2-26-mkv-txt-diag]
+    paths:
+      - '.github/workflows/build-mkv-txt-diag.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+      - name: Recover exact generated source of installed EBOOT
+        uses: actions/download-artifact@v4
+        with:
+          name: FLOW-M7-ARGFIX-BOOTABLE-EBOOT
+          run-id: 41769560344
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: pm6464425-creator/3D-ISO-PLAYER-PS3
+      - name: Patch MKV TXT diagnostic
+        run: |
+          set -euxo pipefail
+          echo '4821d18f8050fe7ec4b648f4e3cebe2eb8dc609b1394d86bd5fbff24ec43ec0d  generated_main_v226.cpp' | sha256sum -c -
+          echo '6843ad0d3754daf4d6f87e36cc6e3b6863709ae5c8bb39a8f3f5f5383da3af6b  generated_rsxutil_v226.cpp' | sha256sum -c -
+          cp generated_main_v226.cpp source/main.cpp
+          cp generated_rsxutil_v226.cpp source/rsxutil.cpp
+          python3 scripts/mkv_txt_diagnostic_v226.py
+          grep -q 'FLOW_ERROR.TXT' source/main.cpp
+          grep -q 'ERROR_NTFS_SOURCE' source/main.cpp
+          grep -q 'M7_HANDOFF_BEGIN' source/main.cpp
+          grep -q 'const char \*args\[\]={url.c_str(),NULL};' source/main.cpp
+          ! grep -q 'const char \*args\[\]={player,url.c_str(),NULL};' source/main.cpp
+          cmp generated_rsxutil_v226.cpp source/rsxutil.cpp
+      - name: Install same PS3DEV and libraries as original build
+        run: |
+          set -euxo pipefail
+          curl --retry 4 --retry-delay 2 -fL 'https://github.com/ps3dev/ps3dev/releases/download/nightly-2026-10-12/ps3dev-linux-X64.tar.gz' -o /tmp/ps3dev.tar.gz
+          tar xzf /tmp/ps3dev.tar.gz -C "$GITHUB_WORKSPACE"
+          echo "PS3DEV=$GITHUB_WORKSPACE/ps3dev" >> "$GITHUB_ENV"
+          echo "PSL1GHT=$GITHUB_WORKSPACE/ps3dev" >> "$GITHUB_ENV"
+          echo "$GITHUB_WORKSPACE/ps3dev/bin" >> "$GITHUB_PATH"
+          echo "$GITHUB_WORKSPACE/ps3dev/ppu/bin" >> "$GITHUB_PATH"
+          echo "$GITHUB_WORKSPACE/ps3dev/spu/bin" >> "$GITHUB_PATH"
+          mkdir -p third_party/include third_party/lib pkgfiles/USRDIR
+          curl -fL https://raw.githubusercontent.com/aldostools/IRISMAN/master/include/ntfs.h -o third_party/include/ntfs.h
+          curl -fL https://raw.githubusercontent.com/aldostools/IRISMAN/master/include/cobra.h -o third_party/include/cobra.h
+          curl -fL https://raw.githubusercontent.com/aldostools/IRISMAN/master/lib/libcobra.a -o third_party/lib/libcobra.a
+          curl -fL https://raw.githubusercontent.com/aldostools/IRISMAN/master/lib/libfatfs.a -o third_party/lib/libfatfs.a
+          curl -fL https://raw.githubusercontent.com/aldostools/IRISMAN/master/lib/libntfs_ext.a -o third_party/lib/libntfs_ext.a
+          curl -fL https://raw.githubusercontent.com/ace20022/libudfread/master/src/udfread.h -o third_party/include/udfread.h
+          curl -fL https://raw.githubusercontent.com/ace20022/libudfread/master/src/blockinput.h -o third_party/include/blockinput.h
+          curl -fL https://raw.githubusercontent.com/ace20022/libudfread/master/src/default_blockinput.h -o third_party/include/default_blockinput.h
+          curl -fL https://raw.githubusercontent.com/ace20022/libudfread/master/src/ecma167.h -o third_party/include/ecma167.h
+          curl -fL https://raw.githubusercontent.com/ace20022/libudfread/master/src/udfread.c -o source/udfread.c
+          curl -fL https://raw.githubusercontent.com/ace20022/libudfread/master/src/ecma167.c -o source/ecma167.c
+          curl -fL https://raw.githubusercontent.com/nothings/stb/master/stb_image.h -o third_party/include/stb_image.h
+      - name: Compile PS3 app and sign NPDRM EBOOT
+        run: |
+          set -euxo pipefail
+          ppu-gcc --version
+          make clean
+          make -j2
+          test -s 3disoplayer.elf
+          mkdir -p build
+          ppu-strip 3disoplayer.elf -o build/3disoplayer.elf
+          sprxlinker build/3disoplayer.elf
+          python3 - <<'PY'
+          from pathlib import Path
+          d=Path('build/3disoplayer.elf').read_bytes()
+          assert d[:8]==bytes.fromhex('7f454c4602020166')
+          assert 1000000<len(d)<2000000
+          PY
+          make_self_npdrm build/3disoplayer.elf EBOOT.BIN UP0001-3DISO0001_00-0000000000000000
+          python3 - <<'PY'
+          from pathlib import Path
+          import hashlib
+          b=Path('EBOOT.BIN').read_bytes()
+          assert b[:4]==b'SCE\x00'
+          assert b[0x90:0x98]==bytes.fromhex('7f454c4602020166')
+          assert b'UP0001-3DISO0001_00-0000000000000000' in b
+          assert 450000<len(b)<700000
+          print('New signed EBOOT',len(b),hashlib.sha256(b).hexdigest())
+          Path('FLOW_MKV_DIAG_EBOOT_SHA256.txt').write_text(hashlib.sha256(b).hexdigest()+'  EBOOT.BIN\n')
+          PY
+      - name: Export compiled diagnostic executable
+        uses: actions/upload-artifact@v4
+        with:
+          name: FLOW226-MKV-TXT-DIAG-EBOOT
+          path: |
+            EBOOT.BIN
+            FLOW_MKV_DIAG_EBOOT_SHA256.txt
+            source/main.cpp
+          if-no-files-found: error
