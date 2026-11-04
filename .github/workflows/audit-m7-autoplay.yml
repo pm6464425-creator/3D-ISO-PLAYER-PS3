@@ -1,0 +1,61 @@
+name: Audit embedded Movian M7 startup argument support
+on:
+  push:
+    branches: [ movie-v2-26-livebg ]
+    paths: ['.github/workflows/audit-m7-autoplay.yml']
+  workflow_dispatch:
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Extract and decrypt M7 SELF for PS3 startup inspection
+        run: |
+          set -euo pipefail
+          curl --retry 4 --retry-delay 2 -fL 'https://movian.eu/Playstation%203/movianM7-7.0.273-playstation3.pkg' -o /tmp/m7.pkg
+          echo '29c06c623b2846d1e9b5717df08397b9c077a90d242d33086bdff557d638e93f  /tmp/m7.pkg' | sha256sum -c -
+          python3 scripts/extract_ps3_debug_pkg.py /tmp/m7.pkg --out /tmp/m7-extracted --prefix USRDIR/movian.self
+          git clone -q --depth=1 https://github.com/zecoxao/ida_console_py_ps3.git /tmp/ps3-decrypter
+          python3 -m pip install -q cryptography capstone
+          python3 /tmp/ps3-decrypter/loaders/ps3lib/sce.py /tmp/m7-extracted/USRDIR/movian.self /tmp/m7.elf
+          test -s /tmp/m7.elf
+          python3 - <<'PY'
+          import zipfile,struct
+          from capstone import Cs,CS_ARCH_PPC,CS_MODE_64,CS_MODE_BIG_ENDIAN
+          z=zipfile.ZipFile('/tmp/m7-extracted/USRDIR/movian.self')
+          lines=z.read('movian.syms').decode('ascii','ignore').splitlines()
+          syms={}
+          for l in lines:
+              bits=l.strip().split()
+              if len(bits)>=2 and bits[1].startswith('.'):
+                  syms[bits[1][1:]]=int(bits[0],16)
+          targets=['main','parse_opts','ps3_early_init','main_init','glw_ps3_start','ntfs_periodic']
+          print('SYMS:',{name:hex(syms[name]) for name in targets if name in syms})
+          elf=open('/tmp/m7.elf','rb').read()
+          assert elf[:4]==bytes.fromhex('7f454c46') and elf[4]==2 and elf[5]==2
+          phoff=struct.unpack_from('>Q',elf,32)[0]
+          phentsz=struct.unpack_from('>H',elf,54)[0]
+          phnum=struct.unpack_from('>H',elf,56)[0]
+          def mem2file(addr):
+              for i in range(phnum):
+                  o=phoff+i*phentsz
+                  p_type,p_flags,p_off,p_vaddr,p_paddr,p_filesz,p_memsz=struct.unpack_from('>IIQQQQQ',elf,o)
+                  if p_type==1 and p_vaddr<=addr<p_vaddr+p_filesz:
+                      return p_off+(addr-p_vaddr)
+              raise RuntimeError('no PT_LOAD segment for '+hex(addr))
+          md=Cs(CS_ARCH_PPC,CS_MODE_64|CS_MODE_BIG_ENDIAN)
+          md.detail=False
+          start=syms['main'];offs=mem2file(start)
+          instructions=list(md.disasm(elf[offs:offs+2400],start))
+          bl=[(hex(x.address),x.mnemonic,x.op_str) for x in instructions if x.mnemonic in ('bl','b','bctrl') or x.mnemonic.startswith('bl')]
+          print('PS3 MAIN CALLS FIRST 2400 BYTES',bl[:85])
+          parse=syms['parse_opts'];print('DIRECT_PARSE_OPTS_BRANCH',any('0x'+format(parse,'x') in arg for _,_,arg in bl))
+          for t in ['SHOWTIME.TXT','TEMP/SHOWTIME.TXT','fileaccess','ntfs0://']:
+              print('ELF_TEXT_FIND',t,elf.find(t.encode()))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: M7-startup-analysis-report
+          path: /tmp/m7.elf
+          retention-days: 1
+          if-no-files-found: warn
