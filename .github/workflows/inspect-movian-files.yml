@@ -1,0 +1,29 @@
+name: Inspect Movian Next PKG payload
+on:
+  push:
+    branches: [ movie-v2-26-livebg ]
+    paths:
+      - '.github/workflows/inspect-movian-files.yml'
+  workflow_dispatch:
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Extract official Movian Next files
+        run: |
+          set -euxo pipefail
+          curl --retry 5 --retry-delay 2 -fL 'https://github.com/Cruslan/PS3-Movian-Next/releases/download/v1.0.0/movian-next.pkg' -o /tmp/movian.pkg
+          echo 'd9c315387dcb6e0e3a34d343b93607cfd79d18669b22940b08edbee8ea6291fa  /tmp/movian.pkg' | sha256sum -c -
+          python3 scripts/extract_ps3_debug_pkg.py /tmp/movian.pkg --out /tmp/movian --prefix USRDIR
+          find /tmp/movian -type f -printf '%p %s bytes\\n' | sort
+          python3 - <<'PY'
+          from pathlib import Path
+          for p in Path('/tmp/movian/USRDIR').rglob('*'):
+              if not p.is_file(): continue
+              b=p.read_bytes()
+              kind='not SCE'
+              if b[:4]==b'SCE\\0':
+                  kind=f'SCE appType={int.from_bytes(b[0x7c:0x80],"big")} magic={b[:16].hex()}'
+              print('FILE',p.name,'size',len(b),kind)
+          PY
