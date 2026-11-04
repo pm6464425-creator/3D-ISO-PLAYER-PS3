@@ -100,7 +100,8 @@ jobs:
           grep -q 'V2.26 VERIFIED SHOWTIME MKV' generated_main_v226.cpp
           grep -q 'V2.26 MKV SAFE HANDOFF' generated_main_v226.cpp
           grep -q 'MKV_SAFE_AUTOPLAY_READY' generated_main_v226.cpp
-          grep -q 'sys_map_path((char\*)mm_path,(char\*)flow_path)' generated_main_v226.cpp
+          grep -q 'mkv_cobra_map_path(mm_path,flow_path)' generated_main_v226.cpp
+          grep -q 'lv2syscall2(35,' generated_main_v226.cpp
           ! grep -q 'getcwd(' generated_main_v226.cpp
           ! grep -q 'chdir(' generated_main_v226.cpp
           grep -q 'showtime_autoplay_file(player,url)' generated_main_v226.cpp
