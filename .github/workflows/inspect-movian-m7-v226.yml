@@ -1,0 +1,52 @@
+name: Inspect official Movian M7 7.0.273 PKG for PS3
+on:
+  push:
+    branches: [movie-v2-26-livebg]
+    paths: ['.github/workflows/inspect-movian-m7-v226.yml']
+  workflow_dispatch:
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Inspect new M7 PS3 binary payload without modifying FLOW
+        run: |
+          set -euxo pipefail
+          curl --retry 3 --retry-delay 2 -fL 'https://movian.eu/Playstation%203/movianM7-7.0.273-playstation3.pkg' -o /tmp/movian_m7.pkg
+          python3 -m pip install --quiet cryptography
+          python3 - <<'PY'
+          import struct,hashlib
+          from pathlib import Path
+          from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
+          b=Path('/tmp/movian_m7.pkg').read_bytes()
+          print('PKG SHA-256',hashlib.sha256(b).hexdigest(),'size',len(b))
+          assert b[:4]==bytes.fromhex('7f504b47')
+          rev=b[4:6];cnt=struct.unpack_from('>I',b,0x14)[0]
+          off=struct.unpack_from('>Q',b,0x20)[0];total=struct.unpack_from('>Q',b,0x28)[0]
+          print('PKG rev/count/datasize',rev.hex(),cnt,total)
+          if rev==bytes.fromhex('0000'):
+              q=b[0x60:0x70];raw=b[off:off+total];data=bytearray(len(raw))
+              for i in range(0,len(raw),16):
+                  k=bytearray(64);k[:8]=q[:8];k[8:16]=q[:8];k[16:24]=q[8:16];k[24:32]=q[8:16];k[56:64]=(i//16).to_bytes(8,'big')
+                  stream=hashlib.sha1(k).digest()[:16]
+                  for j in range(min(16,len(raw)-i)):data[i+j]=raw[i+j]^stream[j]
+          elif rev==bytes.fromhex('8000'):
+              aes=bytes.fromhex('2e7b71d7c9c9a14ea3221f188828b8f8')
+              d=Cipher(algorithms.AES(aes),modes.CTR(b[0x70:0x80])).decryptor()
+              data=d.update(b[off:off+total])+d.finalize()
+          else:raise RuntimeError('unknown pkg revision')
+          for i in range(cnt):
+              no,nl,fo,fl,flags=struct.unpack_from('>IIQQI',data,0x20*i)
+              name=bytes(data[no:no+nl]).rstrip(bytes([0])).decode('utf8','replace')
+              if not name:continue
+              if name.endswith(('.self','.SELF','.BIN','.SFO')) or i<12:
+                  blob=bytes(data[fo:fo+fl])
+                  print('ITEM',name,fl,blob[:16].hex(),hashlib.sha256(blob).hexdigest())
+                  if name.lower().endswith(('.self','.bin')):Path('/tmp/'+name.split('/')[-1]).write_bytes(blob)
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Official-MovianM7-PS3-Inspect
+          path: |
+            /tmp/movian_m7.pkg
+          if-no-files-found: error
