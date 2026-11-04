@@ -121,7 +121,15 @@ jobs:
           cp source/rsxutil.cpp generated_rsxutil_v226.cpp
           make clean
           make
-          make pkg
+          # The source compiles cleanly. Occasionally the legacy make pkg
+          # script exits silently; retain a CEX SELF for independent rescue.
+          ls -lh 3disoplayer.elf 3disoplayer.self pkgfiles/USRDIR/flow_player.self
+          if ! make pkg; then
+            echo "::warning::First pkg generator invocation failed, retrying with diagnostics"
+            df -h .
+            ls -lah 3disoplayer.* pkgfiles/USRDIR/flow_player.self
+            make pkg
+          fi
           cp 3disoplayer.pkg FLOW_MOVIE_V2_26_INTERNAL_PLAYER.pkg
           cp 3disoplayer.gnpdrm.pkg FLOW_MOVIE_V2_26_INTERNAL_PLAYER_GNPDRM.pkg
           grep -q 'APPBG_HQ.JPG' generated_main_v226.cpp
@@ -179,6 +187,18 @@ jobs:
           grep -q 'draw_rgba_region_scaled(x,y,w,top_dst,&g_case_frame,0,0,fw,top_src);' generated_main_v226.cpp
           ! sed -n '/static void flow_update()/,/static void cover_cache_clear/p' generated_main_v226.cpp | grep -q 'const float dt=1.0f/60.0f;'
           test -s pkgfiles/USRDIR/APPBG_HQ.JPG
+
+      - name: Conservar EBOOT y fuentes para recuperacion si PKG falla
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: FLOW-M7-ARGFIX-COMPILED-SELF
+          path: |
+            3disoplayer.self
+            3disoplayer.elf
+            generated_main_v226.cpp
+            generated_rsxutil_v226.cpp
+          if-no-files-found: warn
 
       - name: Guardar V2.26 MKV URL CORRECTA
         uses: actions/upload-artifact@v4
