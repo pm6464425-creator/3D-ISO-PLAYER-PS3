@@ -143,7 +143,20 @@ jobs:
           ! grep -q 'm7_stage_url_file(' generated_main_v226.cpp
           ! grep -q 'SHOWTIME.TXT' generated_main_v226.cpp
           grep -q 'sysProcessExitSpawn2(player,args,NULL,NULL,0,1200,' generated_main_v226.cpp
-          grep -q 'const char \*args\[\]={player,url.c_str(),NULL};' generated_main_v226.cpp
+          grep -q 'const char \\*args\\[\\]={url.c_str(),NULL};' generated_main_v226.cpp
+          ! grep -q 'const char \\*args\\[\\]={player,url.c_str(),NULL};' generated_main_v226.cpp
+          python3 - <<'PY'
+          # Regression for screenshot: the PS3 inserts argv[0] automatically.
+          # The patched Movian M7 parse_opts(argc,argv) skips only argv[0].
+          self_path="/dev_hdd0/game/3DISO0001/USRDIR/flow_player.self"
+          movie="ntfs0://MKV/Dragon.Ball.Super.Beerus.S01E04.CR.WEB-DL.1080P.LMHD.mkv"
+          extras=[movie]  # This is the spawn2 argv parameter
+          child_argv=[self_path]+extras
+          parsed_media_url=child_argv[1] if len(child_argv)>1 else None
+          assert parsed_media_url==movie and parsed_media_url!=self_path
+          assert not parsed_media_url.endswith(".self")
+          print("PS3 M7 argv regression OK:",parsed_media_url)
+          PY
           grep -q 'ps3ntfs_stat(movie.path.c_str(),\&source)' generated_main_v226.cpp
           ! grep -q 'mkv_prepare_playback_path(' generated_main_v226.cpp
           ! grep -q 'MKV_CACHE' generated_main_v226.cpp
@@ -167,10 +180,10 @@ jobs:
           ! sed -n '/static void flow_update()/,/static void cover_cache_clear/p' generated_main_v226.cpp | grep -q 'const float dt=1.0f/60.0f;'
           test -s pkgfiles/USRDIR/APPBG_HQ.JPG
 
-      - name: Guardar V2.26 M7 DIRECTO PARCHEADO
+      - name: Guardar V2.26 MKV URL CORRECTA
         uses: actions/upload-artifact@v4
         with:
-          name: FLOW-MOVIE-V2-26-M7-PATCHED-AUTOPLAY
+          name: FLOW-MOVIE-V2-26-M7-URI-ONLY
           path: |
             FLOW_MOVIE_V2_26_INTERNAL_PLAYER.pkg
             FLOW_MOVIE_V2_26_INTERNAL_PLAYER_GNPDRM.pkg
