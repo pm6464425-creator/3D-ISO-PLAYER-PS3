@@ -87,10 +87,12 @@ static int launch_mkv_in_movian(const Movie &movie)
 
     /* PS3 syscall invocation, without new startup imports (getcwd/chdir
        previously caused a black-screen regression).
-       argv[0] must remain a valid SELF path for PS3's Movian init.
-       The selected file URI is passed in argv[1], for patched M7 versions
-       that accept a startup URL. */
-    const char *args[]={player,url.c_str(),NULL};
+       sysProcessExitSpawn2() supplies the SELF executable as the new
+       process argv[0] automatically. Its second parameter lists EXTRA
+       args only. Supplying the player path here as args[0] caused M7
+       to attempt to play flow_player.self instead of the selected MKV
+       (reproduced on the user's PS3). Pass ONLY the movie URI. */
+    const char *args[]={url.c_str(),NULL};
     sysProcessExitSpawn2(player,args,NULL,NULL,0,1200,
                          SYS_PROCESS_SPAWN_STACK_SIZE_1M);
 
@@ -119,16 +121,18 @@ s=s.replace('show_ok("FLOW no pudo leer el MKV desde el USB NTFS.\\n"',
             'show_ok("FLOW no pudo verificar el MKV en el USB NTFS.\\n"')
 s=s.replace('show_ok("El reproductor Showtime no pudo iniciarse.\\n\\nConsulta FLOW_MOVIE.LOG.");',
             'show_ok("El motor M7 integrado no pudo iniciarse.\\n\\nConsulta FLOW_MOVIE.LOG.");')
-for req in ('FLOW V2.26 EMBEDDED MOVIAN M7 NTFS DIRECT EXPERIMENT',
+for req in ('const char *args[]={url.c_str(),NULL};',
+            'FLOW V2.26 EMBEDDED MOVIAN M7 NTFS DIRECT EXPERIMENT',
             'M7_DIRECT_NTFS_START','m7_direct_media_url(movie)',
             'sysProcessExitSpawn2(player,args,NULL,NULL,0,1200,',
             'V2.26 TRANSITION BRIGHTNESS FIX',
             'V2.26 PS MENU STATIC FRONT BUFFER',
             'V2.26 REALTIME MOTION PERF'):
     if req not in s: raise SystemExit('MISSING invariants: '+req)
-for forbidden in ('mkv_prepare_playback_path(', 'MKV_CACHE/', 'sysFsGetFreeSize(',
+for forbidden in ('const char *args[]={player,url.c_str(),NULL};',
+                  'mkv_prepare_playback_path(', 'MKV_CACHE/', 'sysFsGetFreeSize(',
                   'mkv_cobra_map_path(', 'MKV_CACHE_READY',
                   'chdir(', 'getcwd('):
     if forbidden in s: raise SystemExit('Forbidden old behavior still present: '+forbidden)
 p.write_text(s)
-print('M7 direct NTFS one-PKG experiment patched; no HDD-copy path, preserved stable rendering')
+print('M7 argv0 fix: only the MKV URL passed to PS3 spawn, no extra SELF argument; stable rendering preserved')
