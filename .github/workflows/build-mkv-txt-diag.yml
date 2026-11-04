@@ -5,6 +5,7 @@ on:
     paths:
       - '.github/workflows/build-mkv-txt-diag.yml'
       - 'include/rsxutil.h'
+      - 'Makefile'
   workflow_dispatch:
 permissions:
   contents: read
