@@ -1,0 +1,64 @@
+name: Build M7 embedded NTFS stat retry for FLOW
+on:
+  push:
+    branches: [movie-v2-26-livebg]
+    paths: ['.github/workflows/build-m7-ntfs-retry-v226.yml']
+  workflow_dispatch:
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download and decrypt original Movian M7 for PS3
+        run: |
+          set -euxo pipefail
+          curl --retry 4 --retry-delay 2 -fL 'https://movian.eu/Playstation%203/movianM7-7.0.273-playstation3.pkg' -o /tmp/m7.pkg
+          echo '29c06c623b2846d1e9b5717df08397b9c077a90d242d33086bdff557d638e93f  /tmp/m7.pkg' | sha256sum -c -
+          python3 scripts/extract_ps3_debug_pkg.py /tmp/m7.pkg --out /tmp/m7extract --prefix USRDIR/movian.self
+          echo '25d12712ec5241f6a4aa4d2c8f79638e566989aeb2cc4d95384d53bd908dd8cb  /tmp/m7extract/USRDIR/movian.self' | sha256sum -c -
+          curl --retry 4 --retry-delay 2 -fL 'https://github.com/ps3dev/ps3dev/releases/download/nightly-2026-10-12/ps3dev-linux-X64.tar.gz' -o /tmp/ps3dev.tar.gz
+          tar xzf /tmp/ps3dev.tar.gz -C "$GITHUB_WORKSPACE"
+          git clone -q --depth=1 https://github.com/zecoxao/ida_console_py_ps3.git /tmp/ps3decrypter
+          python3 -m pip install -q cryptography
+          python3 /tmp/ps3decrypter/loaders/ps3lib/sce.py /tmp/m7extract/USRDIR/movian.self /tmp/original_m7.elf
+      - name: Patch native PS3 URL startup and delay NTFS file probing until ready
+        run: |
+          set -euxo pipefail
+          python3 scripts/patch_embedded_m7_cli_v226.py /tmp/m7extract/USRDIR/movian.self /tmp/original_m7.elf /tmp/m7_cli.elf
+          python3 scripts/patch_embedded_m7_ntfs_retry_v226.py /tmp/m7_cli.elf /tmp/m7_ready.elf
+          echo 'db20a26b31e1c571f86c2be580c257a1296c7b8ef880004f48d4642771159c56  /tmp/m7_ready.elf' | sha256sum -c -
+          export PATH="$GITHUB_WORKSPACE/ps3dev/bin:$PATH"
+          make_self /tmp/m7_ready.elf /tmp/m7_ready.self
+          python3 - <<'PY'
+          from pathlib import Path
+          import zipfile,hashlib
+          official=Path('/tmp/m7extract/USRDIR/movian.self').read_bytes()
+          signed=Path('/tmp/m7_ready.self').read_bytes()
+          p=official.find(bytes.fromhex('504b0304'))
+          assert p>5000000 and signed[:4]==bytes.fromhex('53434500')
+          final=Path('/tmp/flow_player_ntfs_retry.self')
+          final.write_bytes(signed+official[p:])
+          with zipfile.ZipFile(final) as z:
+              assert z.testzip() is None and len(z.namelist())==383
+              assert 'movian.syms' in z.namelist()
+          print('PATCHED PLAYER',final.stat().st_size,hashlib.sha256(final.read_bytes()).hexdigest())
+          PY
+          python3 /tmp/ps3decrypter/loaders/ps3lib/sce.py /tmp/flow_player_ntfs_retry.self /tmp/m7_roundtrip.elf
+          python3 - <<'PY'
+          from pathlib import Path
+          import struct,hashlib
+          a=Path('/tmp/m7_ready.elf').read_bytes()
+          b=Path('/tmp/m7_roundtrip.elf').read_bytes()
+          assert len(a)==len(b)
+          # Both signed forms must restore identical PT_LOAD RX bytes, including:
+          # native startup parse, NTFS stat hook, and 164-byte retry trampoline.
+          for off in [0x23935c,0x1db738,0xbe0750,0xbe0774,0xbe0780,0xbe07a4,0xbe07c8,0xbe07dc,0xbe07f0,0xbe07fc,0xbe081c]:
+              assert a[off:off+4]==b[off:off+4],hex(off)
+          assert hashlib.sha256(a).hexdigest()=='db20a26b31e1c571f86c2be580c257a1296c7b8ef880004f48d4642771159c56'
+          print('Native PS3 re-signed M7 NTFS stat retry code roundtrip OK')
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: FLOW-M7-NTFS-RETRY-VERIFIED-SELF
+          path: /tmp/flow_player_ntfs_retry.self
+          if-no-files-found: error
