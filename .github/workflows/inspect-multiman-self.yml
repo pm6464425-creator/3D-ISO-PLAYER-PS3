@@ -22,17 +22,18 @@ jobs:
           import struct, hashlib
           from cryptography.hazmat.primitives.ciphers import Cipher,algorithms,modes
           b=Path('/tmp/multiman.pkg').read_bytes()
-          assert b[:4]==b'\\x7fPKG'
+          print('PKG FILE FIRST', b[:40].hex())
+          assert b[:4]==bytes.fromhex('7f504b47')
           rev=b[4:6]
           count=struct.unpack_from('>I',b,0x14)[0]
           off=struct.unpack_from('>Q',b,0x20)[0]
           length=struct.unpack_from('>Q',b,0x28)[0]
           print('PACKAGE',rev.hex(),count,off,length)
-          if rev==b'\\x80\\0':
+          if rev==bytes.fromhex('8000'):
               key=bytes.fromhex('2e7b71d7c9c9a14ea3221f188828b8f8')
               d=Cipher(algorithms.AES(key),modes.CTR(b[0x70:0x80])).decryptor()
               data=d.update(b[off:off+length])+d.finalize()
-          elif rev==b'\\0\\0':
+          elif rev==bytes.fromhex('0000'):
               import hashlib
               q=b[0x60:0x70];raw=b[off:off+length];data=bytearray(len(raw))
               for i in range(0,len(raw),16):
@@ -45,14 +46,14 @@ jobs:
           for i in range(count):
               e=i*0x20
               no,nl,fo,fl,flags=struct.unpack_from('>IIQQI',data,e)
-              name=bytes(data[no:no+nl]).rstrip(b'\\0').decode('utf8','replace')
+              name=bytes(data[no:no+nl]).rstrip(bytes([0])).decode('utf8','replace')
               if not name: continue
               if i<16 or 'showtime' in name.lower() or 'movian' in name.lower():
                   print('ITEM',i,name,fl,hex(flags))
               if name.lower().endswith('/showtime.self'):
                   content=data[fo:fo+fl]
                   print('SHOWTIME SELF',len(content),content[:16].hex(), 'sha256',hashlib.sha256(content).hexdigest())
-                  if content[:4] == b'SCE\\0':
+                  if content[:4] == bytes.fromhex('53434500'):
                       print('SELF Program type',struct.unpack_from('>I',content,0x7c)[0])
                   Path('/tmp/SHOWTIME.SELF').write_bytes(content)
                   hits+=1
