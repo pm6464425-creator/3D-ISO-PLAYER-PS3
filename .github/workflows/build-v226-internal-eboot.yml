@@ -27,6 +27,7 @@ on:
       - 'scripts/mkv_verified_showtime_v226.py'
       - 'scripts/mkv_safe_cobra_handoff_v226.py'
       - 'scripts/mkv_ntfs_autocache_v226.py'
+      - 'scripts/mkv_m7_direct_v226.py'
       - '.github/workflows/build-v226-internal-eboot.yml'
   workflow_dispatch:
 
@@ -72,12 +73,14 @@ jobs:
           python3 scripts/mkv_verified_showtime_v226.py
           python3 scripts/mkv_safe_cobra_handoff_v226.py
           python3 scripts/mkv_ntfs_autocache_v226.py
-          # Replace the old NPDRM EBOOT rename with a real bootable Showtime SELF.
-          curl --retry 4 --retry-delay 2 -fL 'https://github.com/aldostools/IRISMAN/releases/download/4.91/IRISMAN_4.91.pkg' -o /tmp/irisman_mkv_source.pkg
-          python3 scripts/extract_ps3_debug_pkg.py /tmp/irisman_mkv_source.pkg --out /tmp/verified_showtime --prefix USRDIR/SHOWTIME.SELF
-          echo 'c6fef7d910e5bf35b499dfc932e6c8f1084401bf1a5ed5e99939c70829169f25  /tmp/verified_showtime/USRDIR/SHOWTIME.SELF' | sha256sum -c -
-          cp /tmp/verified_showtime/USRDIR/SHOWTIME.SELF pkgfiles/USRDIR/flow_player.self
-          test "$(stat -c%s pkgfiles/USRDIR/flow_player.self)" -eq 11192245
+          python3 scripts/mkv_m7_direct_v226.py
+          # Vendored into the SAME FLOW package, not a separately installed title.
+          curl --retry 4 --retry-delay 2 -fL 'https://movian.eu/Playstation%203/movianM7-7.0.273-playstation3.pkg' -o /tmp/movian_m7_source.pkg
+          echo '29c06c623b2846d1e9b5717df08397b9c077a90d242d33086bdff557d638e93f  /tmp/movian_m7_source.pkg' | sha256sum -c -
+          python3 scripts/extract_ps3_debug_pkg.py /tmp/movian_m7_source.pkg --out /tmp/verified_movian_m7 --prefix USRDIR/movian.self
+          echo '25d12712ec5241f6a4aa4d2c8f79638e566989aeb2cc4d95384d53bd908dd8cb  /tmp/verified_movian_m7/USRDIR/movian.self' | sha256sum -c -
+          cp /tmp/verified_movian_m7/USRDIR/movian.self pkgfiles/USRDIR/flow_player.self
+          test "$(stat -c%s pkgfiles/USRDIR/flow_player.self)" -eq 9539068
           cp source/main.cpp generated_main_v226.cpp
           cp source/rsxutil.cpp generated_rsxutil_v226.cpp
           make clean
@@ -99,20 +102,16 @@ jobs:
           grep -q 'V2.26 PS HOME MENU LIVE-FLIP' generated_main_v226.cpp
           grep -q 'V2.26 PS MENU STATIC FRONT BUFFER' generated_main_v226.cpp
           grep -q 'V2.26 TRANSITION BRIGHTNESS FIX' generated_main_v226.cpp
-          grep -q 'V2.26 VERIFIED SHOWTIME MKV' generated_main_v226.cpp
-          grep -q 'V2.26 MKV SAFE HANDOFF' generated_main_v226.cpp
-          grep -q 'FLOW V2.26 SELF-CONTAINED NTFS MKV PLAYBACK' generated_main_v226.cpp
-          grep -q 'MKV_CACHE_READY' generated_main_v226.cpp
-          grep -q 'std::string("file://")+playback_path' generated_main_v226.cpp
-          grep -q 'ps3ntfs_read(in,buf,' generated_main_v226.cpp
-          grep -q 'MKV_SAFE_AUTOPLAY_READY' generated_main_v226.cpp
-          grep -q 'mkv_cobra_map_path(mm_path,flow_path)' generated_main_v226.cpp
-          grep -q 'lv2syscall2(35,' generated_main_v226.cpp
+          grep -q 'FLOW V2.26 EMBEDDED MOVIAN M7 NTFS DIRECT EXPERIMENT' generated_main_v226.cpp
+          grep -q 'M7_DIRECT_NTFS_START' generated_main_v226.cpp
+          grep -q 'sysProcessExitSpawn2(player,args,NULL,NULL,0,1200,' generated_main_v226.cpp
+          grep -q 'const char \*const args\[\]={player,url.c_str(),NULL};' generated_main_v226.cpp
+          grep -q 'ps3ntfs_stat(movie.path.c_str(),\&source)' generated_main_v226.cpp
+          ! grep -q 'mkv_prepare_playback_path(' generated_main_v226.cpp
+          ! grep -q 'MKV_CACHE' generated_main_v226.cpp
+          ! grep -q 'sysFsGetFreeSize(' generated_main_v226.cpp
           ! grep -q 'getcwd(' generated_main_v226.cpp
           ! grep -q 'chdir(' generated_main_v226.cpp
-          grep -q 'showtime_autoplay_file(player,url)' generated_main_v226.cpp
-          grep -q 'sysProcessExitSpawn2(player,NULL,NULL,NULL,0,1200,' generated_main_v226.cpp
-          ! grep -q 'launchargv\[0\]=player;' generated_main_v226.cpp
           grep -q 'if(++idle_tick < 4u) return;' generated_main_v226.cpp
           ! grep -q 'fill_rect(x+shad,y+shad,w,h,0x44000000);' generated_main_v226.cpp
           grep -q 'rsx_flip_last_complete();' generated_main_v226.cpp
@@ -130,10 +129,10 @@ jobs:
           ! sed -n '/static void flow_update()/,/static void cover_cache_clear/p' generated_main_v226.cpp | grep -q 'const float dt=1.0f/60.0f;'
           test -s pkgfiles/USRDIR/APPBG_HQ.JPG
 
-      - name: Guardar V2.26 MKV UNICO PKG
+      - name: Guardar V2.26 M7 SIN COPIA HDD
         uses: actions/upload-artifact@v4
         with:
-          name: FLOW-MOVIE-V2-26-MKV-SELFCONTAINED
+          name: FLOW-MOVIE-V2-26-M7-DIRECT-NTFS
           path: |
             FLOW_MOVIE_V2_26_INTERNAL_PLAYER.pkg
             FLOW_MOVIE_V2_26_INTERNAL_PLAYER_GNPDRM.pkg
