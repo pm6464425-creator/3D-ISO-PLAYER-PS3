@@ -13,7 +13,7 @@ p=Path('source/main.cpp')
 s=p.read_text()
 if 'FLOW V2.26 SELF-CONTAINED NTFS MKV PLAYBACK' not in s:
     # Avoid any new include of ppu-lv2 at startup; needed only for fs free size.
-    if '#include <sys/fs.h>' not in s:
+    if '#include <lv2/sysfs.h>' not in s:
         marker='#include <sys/stat.h>\n'
         if s.count(marker)!=1: raise SystemExit('missing stat header')
         s=s.replace(marker,marker+'#include <sys/fs.h>\n#include <fcntl.h>\n',1)
