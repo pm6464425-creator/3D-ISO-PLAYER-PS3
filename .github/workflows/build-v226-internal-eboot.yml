@@ -24,6 +24,7 @@ on:
       - 'scripts/system_menu_keepflip_v226.py'
       - 'scripts/psmenu_static_front_v226.py'
       - 'scripts/transition_brightness_v226.py'
+      - 'scripts/mkv_verified_showtime_v226.py'
       - '.github/workflows/build-v226-internal-eboot.yml'
   workflow_dispatch:
 
@@ -66,6 +67,13 @@ jobs:
           python3 scripts/system_menu_keepflip_v226.py
           python3 scripts/psmenu_static_front_v226.py
           python3 scripts/transition_brightness_v226.py
+          python3 scripts/mkv_verified_showtime_v226.py
+          # Replace the old NPDRM EBOOT rename with a real bootable Showtime SELF.
+          curl --retry 4 --retry-delay 2 -fL 'https://github.com/aldostools/IRISMAN/releases/download/4.91/IRISMAN_4.91.pkg' -o /tmp/irisman_mkv_source.pkg
+          python3 scripts/extract_ps3_debug_pkg.py /tmp/irisman_mkv_source.pkg --out /tmp/verified_showtime --prefix USRDIR/SHOWTIME.SELF
+          echo 'c6fef7d910e5bf35b499dfc932e6c8f1084401bf1a5ed5e99939c70829169f25  /tmp/verified_showtime/USRDIR/SHOWTIME.SELF' | sha256sum -c -
+          cp /tmp/verified_showtime/USRDIR/SHOWTIME.SELF pkgfiles/USRDIR/flow_player.self
+          test "$(stat -c%s pkgfiles/USRDIR/flow_player.self)" -eq 11192245
           cp source/main.cpp generated_main_v226.cpp
           cp source/rsxutil.cpp generated_rsxutil_v226.cpp
           make clean
@@ -87,6 +95,10 @@ jobs:
           grep -q 'V2.26 PS HOME MENU LIVE-FLIP' generated_main_v226.cpp
           grep -q 'V2.26 PS MENU STATIC FRONT BUFFER' generated_main_v226.cpp
           grep -q 'V2.26 TRANSITION BRIGHTNESS FIX' generated_main_v226.cpp
+          grep -q 'V2.26 VERIFIED SHOWTIME MKV' generated_main_v226.cpp
+          grep -q 'showtime_autoplay_file(player,url)' generated_main_v226.cpp
+          grep -q 'sysProcessExitSpawn2(player,NULL,NULL,NULL,0,1200,' generated_main_v226.cpp
+          ! grep -q 'launchargv\[0\]=player;' generated_main_v226.cpp
           grep -q 'if(++idle_tick < 4u) return;' generated_main_v226.cpp
           ! grep -q 'fill_rect(x+shad,y+shad,w,h,0x44000000);' generated_main_v226.cpp
           grep -q 'rsx_flip_last_complete();' generated_main_v226.cpp
@@ -104,10 +116,10 @@ jobs:
           ! sed -n '/static void flow_update()/,/static void cover_cache_clear/p' generated_main_v226.cpp | grep -q 'const float dt=1.0f/60.0f;'
           test -s pkgfiles/USRDIR/APPBG_HQ.JPG
 
-      - name: Guardar V2.26 NODARK TRANSITION
+      - name: Guardar V2.26 MKV VERIFIED
         uses: actions/upload-artifact@v4
         with:
-          name: FLOW-MOVIE-V2-26-NODARK-TRANSITION
+          name: FLOW-MOVIE-V2-26-MKV-VERIFIED
           path: |
             FLOW_MOVIE_V2_26_INTERNAL_PLAYER.pkg
             FLOW_MOVIE_V2_26_INTERNAL_PLAYER_GNPDRM.pkg
