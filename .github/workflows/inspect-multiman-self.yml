@@ -61,6 +61,13 @@ jobs:
           assert hits>=1
           PY
           python3 /tmp/x.py
+      - name: Upload upstream multiMAN PKG for inspection
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Multiman-upstream-package-debug
+          path: /tmp/multiman.pkg
+          if-no-files-found: warn
       - uses: actions/upload-artifact@v4
         with:
           name: Multiman-Showtime-Self-Verified
