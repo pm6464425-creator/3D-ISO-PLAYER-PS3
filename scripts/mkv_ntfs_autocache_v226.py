@@ -16,7 +16,7 @@ if 'FLOW V2.26 SELF-CONTAINED NTFS MKV PLAYBACK' not in s:
     if '#include <lv2/sysfs.h>' not in s:
         marker='#include <sys/stat.h>\n'
         if s.count(marker)!=1: raise SystemExit('missing stat header')
-        s=s.replace(marker,marker+'#include <sys/fs.h>\n#include <fcntl.h>\n',1)
+        s=s.replace(marker,marker+'#include <lv2/sysfs.h>\n#include <fcntl.h>\n',1)
 
     at='static int launch_mkv_in_movian(const Movie &movie)\n{'
     if s.count(at)!=1:raise SystemExit('MKV launch anchor missing')
