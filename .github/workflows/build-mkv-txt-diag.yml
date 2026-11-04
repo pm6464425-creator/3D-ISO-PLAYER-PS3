@@ -4,6 +4,7 @@ on:
     branches: [movie-v2-26-mkv-txt-diag]
     paths:
       - '.github/workflows/build-mkv-txt-diag.yml'
+      - 'include/rsxutil.h'
   workflow_dispatch:
 permissions:
   contents: read
