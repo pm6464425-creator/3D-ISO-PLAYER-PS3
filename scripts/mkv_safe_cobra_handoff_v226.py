@@ -35,9 +35,7 @@ new='''    /* V2.26 MKV SAFE HANDOFF:
        to the FLOW UI rather than killing the process or black-screening. */
     /* Avoid a new external lib symbol: call the same syscall35 used by
        IRISMAN's sys_map_path() implementation directly. */
-    lv2syscall2(35,(u64)(uintptr_t)mm_path,(u64)(uintptr_t)flow_path);
-    return_to_user_prog(s32);
-    int map_ret=(int)p1;
+    int map_ret=mkv_cobra_map_path(mm_path,flow_path);
     if(map_ret!=0) {
         char info[96];
         snprintf(info,sizeof(info),"sys_map_path=%d",map_ret);
@@ -50,10 +48,21 @@ new='''    /* V2.26 MKV SAFE HANDOFF:
 '''
 if s.count(old)!=1: raise SystemExit('MKV starter not found exactly once')
 s=s.replace(old,new,1)
+# A separate helper allows the PS3 lv2 return macro to return into the helper,
+# not prematurely return from launch_mkv_in_movian().
+intro='static int launch_mkv_in_movian(const Movie &movie)'
+if s.count(intro)!=1: raise SystemExit('Cannot place PS3 syscall35 helper')
+s=s.replace(intro, r'''static int mkv_cobra_map_path(const char *from, const char *to)
+{
+    lv2syscall2(35,(u64)(uintptr_t)from,(u64)(uintptr_t)to);
+    return_to_user_prog(s32);
+}
+
+'''+intro,1)
 assert 'getcwd(' not in s and 'chdir(' not in s
 for tok in ('V2.26 MKV SAFE HANDOFF','V2.26 VERIFIED SHOWTIME MKV','V2.26 TRANSITION BRIGHTNESS FIX',
             'V2.26 PS MENU STATIC FRONT BUFFER','V2.26 REALTIME MOTION PERF',
-            'lv2syscall2(35,(u64)(uintptr_t)mm_path,(u64)(uintptr_t)flow_path)'):
+            'mkv_cobra_map_path(mm_path,flow_path)'):
     if tok not in s: raise SystemExit('Missing required marker: '+tok)
 p.write_text(s)
 print('MKV safe handoff applied: prior boot-safe source + original IRISMAN path mapping')
