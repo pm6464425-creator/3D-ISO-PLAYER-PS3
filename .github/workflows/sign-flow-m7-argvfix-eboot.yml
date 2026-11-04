@@ -1,0 +1,53 @@
+name: Sign compiled FLOW M7 argvfix EBOOT without PKG generator
+on:
+  push:
+    branches: [movie-v2-26-livebg]
+    paths: ['.github/workflows/sign-flow-m7-argvfix-eboot.yml']
+  workflow_dispatch:
+jobs:
+  sign:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download already compiled and source-audited PS3 ELF
+        uses: actions/download-artifact@v4
+        with:
+          name: FLOW-M7-ARGFIX-COMPILED-SELF
+          run-id: 41768673959
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: pm6464425-creator/3D-ISO-PLAYER-PS3
+      - name: Generate NPDRM EBOOT exactly matching FLOW package content ID
+        run: |
+          set -euxo pipefail
+          test -s 3disoplayer.elf
+          test -s 3disoplayer.self
+          grep -Fq 'const char *args[]={url.c_str(),NULL};' generated_main_v226.cpp
+          ! grep -Fq 'const char *args[]={player,url.c_str(),NULL};' generated_main_v226.cpp
+          echo 'PCP64 compiled ELF and CEX SELF:'
+          sha256sum 3disoplayer.elf 3disoplayer.self
+          curl --retry 4 --retry-delay 2 -fL 'https://github.com/ps3dev/ps3dev/releases/download/nightly-2026-10-12/ps3dev-linux-X64.tar.gz' -o /tmp/ps3dev.tar.gz
+          tar xzf /tmp/ps3dev.tar.gz -C "$GITHUB_WORKSPACE"
+          export PS3DEV="$GITHUB_WORKSPACE/ps3dev"
+          export PATH="$PS3DEV/bin:$PS3DEV/ppu/bin:$PATH"
+          make_self_npdrm 3disoplayer.elf EBOOT.BIN UP0001-3DISO0001_00-0000000000000000
+          test -s EBOOT.BIN
+          python3 - <<'PY'
+          from pathlib import Path
+          import struct,hashlib
+          b=Path('EBOOT.BIN').read_bytes()
+          print('NPDRM EBOOT',len(b),b[:64].hex(),hashlib.sha256(b).hexdigest())
+          assert b[:4]==bytes.fromhex('53434500') and 400000<len(b)<800000
+          assert b[0xA:0xC]==bytes.fromhex('0001')
+          assert b.count(b'UP0001-3DISO0001_00-0000000000000000')>0
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: FLOW-M7-ARGFIX-NPDRM-EBOOT-VERIFIED
+          path: |
+            EBOOT.BIN
+            generated_main_v226.cpp
+            generated_rsxutil_v226.cpp
+          if-no-files-found: error
