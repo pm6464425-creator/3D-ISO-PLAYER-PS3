@@ -1,0 +1,56 @@
+name: Inspect IRISMAN Movian SELF
+on:
+  push:
+    branches: [ movie-v2-26-livebg ]
+    paths: [ '.github/workflows/inspect-irisman-movian.yml' ]
+  workflow_dispatch:
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Inspect and extract official IRISMAN Showtime SELF
+        run: |
+          set -euxo pipefail
+          curl --retry 4 --retry-delay 2 -fL 'https://github.com/aldostools/IRISMAN/releases/download/4.91/IRISMAN_4.91.pkg' -o /tmp/irisman.pkg
+          python3 -m pip install -q cryptography
+          cat > /tmp/extract.py <<'PY'
+          from pathlib import Path
+          from cryptography.hazmat.primitives.ciphers import Cipher,algorithms,modes
+          import hashlib,struct
+          b=Path('/tmp/irisman.pkg').read_bytes()
+          assert b[:4]==bytes.fromhex('7f504b47')
+          rev=b[4:6]
+          count=struct.unpack_from('>I',b,0x14)[0]
+          off=struct.unpack_from('>Q',b,0x20)[0]
+          length=struct.unpack_from('>Q',b,0x28)[0]
+          print('HEADER',rev.hex(),count,off,length)
+          if rev == bytes.fromhex('8000'):
+              d=Cipher(algorithms.AES(bytes.fromhex('2e7b71d7c9c9a14ea3221f188828b8f8')),modes.CTR(b[0x70:0x80])).decryptor()
+              data=d.update(b[off:off+length])+d.finalize()
+          elif rev == bytes.fromhex('0000'):
+              q=b[0x60:0x70];raw=b[off:off+length];data=bytearray(len(raw))
+              for i in range(0,len(raw),16):
+                  c=bytearray(64);c[:8]=q[:8];c[8:16]=q[:8];c[16:24]=q[8:16];c[24:32]=q[8:16];c[56:64]=(i//16).to_bytes(8,'big')
+                  k=hashlib.sha1(c).digest()[:16]
+                  for j in range(min(16,len(raw)-i)):data[i+j]=raw[i+j]^k[j]
+          else:raise RuntimeError('invalid PKG revision')
+          hit=0
+          for i in range(count):
+              no,nl,fo,fl,flags=struct.unpack_from('>IIQQI',data,i*0x20)
+              name=bytes(data[no:no+nl]).rstrip(bytes([0])).decode('utf8','replace')
+              if i<25 or 'showtime' in name.lower() or 'movian' in name.lower():print('ENTRY',i,name,fl,hex(flags))
+              if name.lower().endswith(('/showtime.self','/movian.self')):
+                  blob=bytes(data[fo:fo+fl]);print('EXTRACTED',name,len(blob),blob[:20].hex(),'SHA',hashlib.sha256(blob).hexdigest())
+                  assert blob[:4]==bytes.fromhex('53434500') and len(blob)>1000000
+                  Path('/tmp/SHOWTIME.SELF').write_bytes(blob)
+                  hit+=1
+          print('VALID SELF COUNT',hit)
+          assert hit>=1
+          PY
+          python3 /tmp/extract.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Verified-IRISMAN-SHOWTIME-SELF
+          path: /tmp/SHOWTIME.SELF
+          if-no-files-found: error
