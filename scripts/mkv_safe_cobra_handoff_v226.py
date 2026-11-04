@@ -6,6 +6,8 @@ from pathlib import Path
 # This is PS3 Cobra's sys_map_path(), not a userspace cwd change.
 p=Path('source/main.cpp')
 s=p.read_text()
+if '#include <ppu-lv2.h>' not in s:
+    s=s.replace('#include <ppu-types.h>\n','#include <ppu-types.h>\n#include <ppu-lv2.h>\n',1)
 old='''    /* Verified multiMAN/IRISMAN launch semantics: no fake argv[0] = player!
        SHOWTIME.SELF itself reads TEMP/SHOWTIME.TXT to open the selected movie. */
     sysProcessExitSpawn2(player,NULL,NULL,NULL,0,1200,
@@ -31,7 +33,11 @@ new='''    /* V2.26 MKV SAFE HANDOFF:
        This public libcobra syscall35 helper is supported by Cobra and
        HEN versions that enable path mapping; if unavailable we return
        to the FLOW UI rather than killing the process or black-screening. */
-    int map_ret=sys_map_path((char*)mm_path,(char*)flow_path);
+    /* Avoid a new external lib symbol: call the same syscall35 used by
+       IRISMAN's sys_map_path() implementation directly. */
+    lv2syscall2(35,(u64)(uintptr_t)mm_path,(u64)(uintptr_t)flow_path);
+    return_to_user_prog(s32);
+    int map_ret=(int)p1;
     if(map_ret!=0) {
         char info[96];
         snprintf(info,sizeof(info),"sys_map_path=%d",map_ret);
@@ -47,7 +53,7 @@ s=s.replace(old,new,1)
 assert 'getcwd(' not in s and 'chdir(' not in s
 for tok in ('V2.26 MKV SAFE HANDOFF','V2.26 VERIFIED SHOWTIME MKV','V2.26 TRANSITION BRIGHTNESS FIX',
             'V2.26 PS MENU STATIC FRONT BUFFER','V2.26 REALTIME MOTION PERF',
-            'sys_map_path((char*)mm_path,(char*)flow_path)'):
+            'lv2syscall2(35,(u64)(uintptr_t)mm_path,(u64)(uintptr_t)flow_path)'):
     if tok not in s: raise SystemExit('Missing required marker: '+tok)
 p.write_text(s)
 print('MKV safe handoff applied: prior boot-safe source + original IRISMAN path mapping')
