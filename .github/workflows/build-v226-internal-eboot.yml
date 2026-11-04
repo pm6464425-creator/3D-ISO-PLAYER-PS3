@@ -23,6 +23,7 @@ on:
       - 'scripts/system_menu_pause_v226.py'
       - 'scripts/system_menu_keepflip_v226.py'
       - 'scripts/psmenu_static_front_v226.py'
+      - 'scripts/transition_brightness_v226.py'
       - '.github/workflows/build-v226-internal-eboot.yml'
   workflow_dispatch:
 
@@ -64,6 +65,7 @@ jobs:
           python3 scripts/system_menu_pause_v226.py
           python3 scripts/system_menu_keepflip_v226.py
           python3 scripts/psmenu_static_front_v226.py
+          python3 scripts/transition_brightness_v226.py
           cp source/main.cpp generated_main_v226.cpp
           cp source/rsxutil.cpp generated_rsxutil_v226.cpp
           make clean
@@ -84,6 +86,9 @@ jobs:
           grep -q 'V2.26 SYSTEM MENU PAUSE' generated_main_v226.cpp
           grep -q 'V2.26 PS HOME MENU LIVE-FLIP' generated_main_v226.cpp
           grep -q 'V2.26 PS MENU STATIC FRONT BUFFER' generated_main_v226.cpp
+          grep -q 'V2.26 TRANSITION BRIGHTNESS FIX' generated_main_v226.cpp
+          grep -q 'if(++idle_tick < 4u) return;' generated_main_v226.cpp
+          ! grep -q 'fill_rect(x+shad,y+shad,w,h,0x44000000);' generated_main_v226.cpp
           grep -q 'rsx_flip_last_complete();' generated_main_v226.cpp
           grep -q 'gcmSetFlip(context,curr_fb \^ 1u);' generated_rsxutil_v226.cpp
           grep -q 'if(!app_running) break;' generated_main_v226.cpp
@@ -99,10 +104,10 @@ jobs:
           ! sed -n '/static void flow_update()/,/static void cover_cache_clear/p' generated_main_v226.cpp | grep -q 'const float dt=1.0f/60.0f;'
           test -s pkgfiles/USRDIR/APPBG_HQ.JPG
 
-      - name: Guardar V2.26 PS MENU STATICFRONT
+      - name: Guardar V2.26 NODARK TRANSITION
         uses: actions/upload-artifact@v4
         with:
-          name: FLOW-MOVIE-V2-26-PSMENU-STATICFRONT
+          name: FLOW-MOVIE-V2-26-NODARK-TRANSITION
           path: |
             FLOW_MOVIE_V2_26_INTERNAL_PLAYER.pkg
             FLOW_MOVIE_V2_26_INTERNAL_PLAYER_GNPDRM.pkg
