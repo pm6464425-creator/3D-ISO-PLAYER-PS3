@@ -1,0 +1,67 @@
+name: Inspect multiMAN mod embedded SHOWTIME SELF
+on:
+  push:
+    branches: [ movie-v2-26-livebg ]
+    paths:
+      - '.github/workflows/inspect-multiman-self.yml'
+  workflow_dispatch:
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download official multiMAN MOD release
+        run: |
+          curl --retry 4 --retry-delay 2 -fL 'https://github.com/aldostools/Resources/releases/download/multiMAN/multiMAN_MOD_based_mmCM_4.85.01.pkg' -o /tmp/multiman.pkg
+          ls -lh /tmp/multiman.pkg
+          sha256sum /tmp/multiman.pkg
+          python3 -m pip install --quiet cryptography
+      - name: Inspect PKG and extract bundled standalone SELF
+        run: |
+          cat > /tmp/x.py <<'PY'
+          from pathlib import Path
+          import struct, hashlib
+          from cryptography.hazmat.primitives.ciphers import Cipher,algorithms,modes
+          b=Path('/tmp/multiman.pkg').read_bytes()
+          assert b[:4]==b'\\x7fPKG'
+          rev=b[4:6]
+          count=struct.unpack_from('>I',b,0x14)[0]
+          off=struct.unpack_from('>Q',b,0x20)[0]
+          length=struct.unpack_from('>Q',b,0x28)[0]
+          print('PACKAGE',rev.hex(),count,off,length)
+          if rev==b'\\x80\\0':
+              key=bytes.fromhex('2e7b71d7c9c9a14ea3221f188828b8f8')
+              d=Cipher(algorithms.AES(key),modes.CTR(b[0x70:0x80])).decryptor()
+              data=d.update(b[off:off+length])+d.finalize()
+          elif rev==b'\\0\\0':
+              import hashlib
+              q=b[0x60:0x70];raw=b[off:off+length];data=bytearray(len(raw))
+              for i in range(0,len(raw),16):
+                  c=bytearray(64);c[:8]=q[:8];c[8:16]=q[:8];c[16:24]=q[8:16];c[24:32]=q[8:16];c[56:64]=(i//16).to_bytes(8,'big')
+                  k=hashlib.sha1(c).digest()[:16]
+                  for j in range(min(16,len(raw)-i)):data[i+j]=raw[i+j]^k[j]
+          else:raise RuntimeError('Unrecognized PKG revision')
+          print('DECRYPTED',len(data))
+          hits=0
+          for i in range(count):
+              e=i*0x20
+              no,nl,fo,fl,flags=struct.unpack_from('>IIQQI',data,e)
+              name=bytes(data[no:no+nl]).rstrip(b'\\0').decode('utf8','replace')
+              if not name: continue
+              if i<16 or 'showtime' in name.lower() or 'movian' in name.lower():
+                  print('ITEM',i,name,fl,hex(flags))
+              if name.lower().endswith('/showtime.self'):
+                  content=data[fo:fo+fl]
+                  print('SHOWTIME SELF',len(content),content[:16].hex(), 'sha256',hashlib.sha256(content).hexdigest())
+                  if content[:4] == b'SCE\\0':
+                      print('SELF Program type',struct.unpack_from('>I',content,0x7c)[0])
+                  Path('/tmp/SHOWTIME.SELF').write_bytes(content)
+                  hits+=1
+          print('SELF hits',hits)
+          assert hits>=1
+          PY
+          python3 /tmp/x.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Multiman-Showtime-Self-Verified
+          path: /tmp/SHOWTIME.SELF
+          if-no-files-found: error
