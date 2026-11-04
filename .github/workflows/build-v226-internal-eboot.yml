@@ -25,6 +25,7 @@ on:
       - 'scripts/psmenu_static_front_v226.py'
       - 'scripts/transition_brightness_v226.py'
       - 'scripts/mkv_verified_showtime_v226.py'
+      - 'scripts/mkv_direct_autoplay_cwd_v226.py'
       - '.github/workflows/build-v226-internal-eboot.yml'
   workflow_dispatch:
 
@@ -68,6 +69,7 @@ jobs:
           python3 scripts/psmenu_static_front_v226.py
           python3 scripts/transition_brightness_v226.py
           python3 scripts/mkv_verified_showtime_v226.py
+          python3 scripts/mkv_direct_autoplay_cwd_v226.py
           # Replace the old NPDRM EBOOT rename with a real bootable Showtime SELF.
           curl --retry 4 --retry-delay 2 -fL 'https://github.com/aldostools/IRISMAN/releases/download/4.91/IRISMAN_4.91.pkg' -o /tmp/irisman_mkv_source.pkg
           python3 scripts/extract_ps3_debug_pkg.py /tmp/irisman_mkv_source.pkg --out /tmp/verified_showtime --prefix USRDIR/SHOWTIME.SELF
@@ -96,6 +98,9 @@ jobs:
           grep -q 'V2.26 PS MENU STATIC FRONT BUFFER' generated_main_v226.cpp
           grep -q 'V2.26 TRANSITION BRIGHTNESS FIX' generated_main_v226.cpp
           grep -q 'V2.26 VERIFIED SHOWTIME MKV' generated_main_v226.cpp
+          grep -q 'FLOW V2.26 MKV DIRECT AUTOPLAY' generated_main_v226.cpp
+          grep -q 'MKV_DIRECT_AUTOPLAY_READY' generated_main_v226.cpp
+          grep -q 'chdir(self_directory)' generated_main_v226.cpp
           grep -q 'showtime_autoplay_file(player,url)' generated_main_v226.cpp
           grep -q 'sysProcessExitSpawn2(player,NULL,NULL,NULL,0,1200,' generated_main_v226.cpp
           ! grep -q 'launchargv\[0\]=player;' generated_main_v226.cpp
@@ -116,10 +121,10 @@ jobs:
           ! sed -n '/static void flow_update()/,/static void cover_cache_clear/p' generated_main_v226.cpp | grep -q 'const float dt=1.0f/60.0f;'
           test -s pkgfiles/USRDIR/APPBG_HQ.JPG
 
-      - name: Guardar V2.26 MKV VERIFIED
+      - name: Guardar V2.26 MKV DIRECT PLAY
         uses: actions/upload-artifact@v4
         with:
-          name: FLOW-MOVIE-V2-26-MKV-VERIFIED
+          name: FLOW-MOVIE-V2-26-MKV-AUTOPLAY-CWD
           path: |
             FLOW_MOVIE_V2_26_INTERNAL_PLAYER.pkg
             FLOW_MOVIE_V2_26_INTERNAL_PLAYER_GNPDRM.pkg
