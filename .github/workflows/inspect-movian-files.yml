@@ -45,7 +45,7 @@ jobs:
               print('SELF application program type',struct.unpack_from('>I',b,0x7c)[0])
           PY
       - name: Upload verified SHOWTIME SELF
-        if: ${{ hashFiles('/tmp/showtime.self') != '' }}
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: SHOWTIME-SELF-FOR-FLOW-DEBUG
