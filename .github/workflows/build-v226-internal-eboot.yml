@@ -26,6 +26,7 @@ on:
       - 'scripts/transition_brightness_v226.py'
       - 'scripts/mkv_verified_showtime_v226.py'
       - 'scripts/mkv_safe_cobra_handoff_v226.py'
+      - 'scripts/mkv_ntfs_autocache_v226.py'
       - '.github/workflows/build-v226-internal-eboot.yml'
   workflow_dispatch:
 
@@ -70,6 +71,7 @@ jobs:
           python3 scripts/transition_brightness_v226.py
           python3 scripts/mkv_verified_showtime_v226.py
           python3 scripts/mkv_safe_cobra_handoff_v226.py
+          python3 scripts/mkv_ntfs_autocache_v226.py
           # Replace the old NPDRM EBOOT rename with a real bootable Showtime SELF.
           curl --retry 4 --retry-delay 2 -fL 'https://github.com/aldostools/IRISMAN/releases/download/4.91/IRISMAN_4.91.pkg' -o /tmp/irisman_mkv_source.pkg
           python3 scripts/extract_ps3_debug_pkg.py /tmp/irisman_mkv_source.pkg --out /tmp/verified_showtime --prefix USRDIR/SHOWTIME.SELF
@@ -99,6 +101,10 @@ jobs:
           grep -q 'V2.26 TRANSITION BRIGHTNESS FIX' generated_main_v226.cpp
           grep -q 'V2.26 VERIFIED SHOWTIME MKV' generated_main_v226.cpp
           grep -q 'V2.26 MKV SAFE HANDOFF' generated_main_v226.cpp
+          grep -q 'FLOW V2.26 SELF-CONTAINED NTFS MKV PLAYBACK' generated_main_v226.cpp
+          grep -q 'MKV_CACHE_READY' generated_main_v226.cpp
+          grep -q 'std::string("file://")+playback_path' generated_main_v226.cpp
+          grep -q 'ps3ntfs_read(in,buf,' generated_main_v226.cpp
           grep -q 'MKV_SAFE_AUTOPLAY_READY' generated_main_v226.cpp
           grep -q 'mkv_cobra_map_path(mm_path,flow_path)' generated_main_v226.cpp
           grep -q 'lv2syscall2(35,' generated_main_v226.cpp
@@ -124,10 +130,10 @@ jobs:
           ! sed -n '/static void flow_update()/,/static void cover_cache_clear/p' generated_main_v226.cpp | grep -q 'const float dt=1.0f/60.0f;'
           test -s pkgfiles/USRDIR/APPBG_HQ.JPG
 
-      - name: Guardar V2.26 MKV RECOVERY
+      - name: Guardar V2.26 MKV UNICO PKG
         uses: actions/upload-artifact@v4
         with:
-          name: FLOW-MOVIE-V2-26-MKV-RECOVERY
+          name: FLOW-MOVIE-V2-26-MKV-SELFCONTAINED
           path: |
             FLOW_MOVIE_V2_26_INTERNAL_PLAYER.pkg
             FLOW_MOVIE_V2_26_INTERNAL_PLAYER_GNPDRM.pkg
