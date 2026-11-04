@@ -101,7 +101,7 @@ static int mkv_prepare_playback_path(const Movie &movie, std::string &dst)
     }
 
     const size_t BUFSIZE=256*1024;
-    unsigned char *buf=(unsigned char *)malloc(BUFSIZE);
+    char *buf=(char *)malloc(BUFSIZE);
     if(!buf) {
         fclose(out);
         ps3ntfs_close(in);
