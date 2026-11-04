@@ -14,7 +14,7 @@ mkv=r'''/* FLOW V2.26 EMBEDDED MOVIAN M7 NTFS DIRECT EXPERIMENT
    Bundled official Movian M7 7.0.273 movian.self. ONE PKG, no other titles.
    FLOW lists files with PS3 libntfs, then passes the original USB URI
    directly to the embedded media engine. Never copy an MKV to internal HDD.
-   Uses patched M7 PS3 argv URL startup, never legacy SHOWTIME.TXT.
+   Uses patched M7 PS3 argv URL startup, without legacy disk handoff.
    IMPORTANT: This cannot certify target Movie playback without PS3 hardware. */
 #define MKV_ERR_MOVIAN_NOT_FOUND (-25001)
 #define MKV_ERR_SPAWN_RETURNED   (-25002)
